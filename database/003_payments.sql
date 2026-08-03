@@ -6,7 +6,7 @@
 -- the client.  The paypal_order_id / capture_id pair provides idempotency and
 -- audit linkage back to PayPal.
 
-CREATE TABLE IF NOT EXISTS payments (
+CREATE TABLE IF NOT EXISTS patwago_payments (
   id                text        PRIMARY KEY,
   paypal_order_id   text        NOT NULL UNIQUE,
   capture_id        text,
@@ -25,16 +25,11 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 -- Indexes for common query patterns.
-CREATE INDEX IF NOT EXISTS payments_status_idx     ON payments(status);
-CREATE INDEX IF NOT EXISTS payments_plan_idx        ON payments(plan);
-CREATE INDEX IF NOT EXISTS payments_customer_idx    ON payments(customer_id);
-CREATE INDEX IF NOT EXISTS payments_payer_email_idx ON payments(payer_email);
-CREATE INDEX IF NOT EXISTS payments_captured_at_idx  ON payments(captured_at DESC);
+CREATE INDEX IF NOT EXISTS patwago_payments_status_idx     ON patwago_payments(status);
+CREATE INDEX IF NOT EXISTS patwago_payments_plan_idx        ON patwago_payments(plan);
+CREATE INDEX IF NOT EXISTS patwago_payments_customer_idx    ON patwago_payments(customer_id);
+CREATE INDEX IF NOT EXISTS patwago_payments_payer_email_idx ON patwago_payments(payer_email);
+CREATE INDEX IF NOT EXISTS patwago_payments_captured_at_idx  ON patwago_payments(captured_at DESC);
 
--- Idempotency: a PayPal order can only have one completed payment row.
--- The UNIQUE constraint on paypal_order_id already enforces that at insert
--- time; this partial index additionally prevents duplicate completions when
--- using upsert patterns.
-CREATE UNIQUE INDEX IF NOT EXISTS payments_paypal_order_completed_uq
-  ON payments(paypal_order_id)
-  WHERE status = 'completed';
+-- Idempotency: the UNIQUE constraint on paypal_order_id already enforces one
+-- payment row per PayPal order for this app-specific table.
