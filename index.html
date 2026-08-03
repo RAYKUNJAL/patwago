@@ -1779,90 +1779,103 @@ else{setupPayPalButtons()}
 })();
 
 
-/* ---------- Vendor map (Leaflet + OpenStreetMap, no API key) ---------- */
+/* ---------- Vendor map (Google Maps + iframe fallback) ---------- */
 (function(){
   var mapEl=document.getElementById('vendorMap');
   if(!mapEl)return;
   var CAT_LABELS={water_sports:'Water Sports',tours:'Tours',food:'Food',adventure:'Adventure',transport:'Transport',beauty:'Beauty',crafts:'Crafts',lodging:'Lodging'};
 
-  // Lazy-load Leaflet JS then init
   function loadScript(src,cb){
     var s=document.createElement('script');
-    s.src=src;s.crossOrigin='';
-    s.onload=cb;s.onerror=function(){mapEl.innerHTML='<p class="muted" style="display:flex;align-items:center;justify-content:center;height:100%">Map failed to load.</p>'};
+    s.src=src;s.async=true;s.defer=true;
+    s.onload=cb;s.onerror=function(){showFallback('Google Maps failed to load.')};
     document.head.appendChild(s);
   }
 
+  function showFallback(message){
+    mapEl.innerHTML='<iframe title="Jamaica vendor map" src="https://www.google.com/maps?q=Jamaica&output=embed" loading="lazy" style="width:100%;height:100%;border:0;border-radius:14px"></iframe>'+
+      '<div style="position:absolute;left:16px;bottom:16px;right:16px;padding:10px 12px;border-radius:12px;background:rgba(10,10,10,.78);border:1px solid rgba(255,215,0,.25);color:#F8F9FA;font-size:13px">'+esc(message||'Showing fallback map. Open the app for exact vendor directions.')+'</div>';
+    mapEl.style.position='relative';
+  }
+
+  function markerIcon(color){
+    return {
+      path: 'M12 2C8.1 2 5 5.1 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z',
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: '#0A0A0A',
+      strokeWeight: 2,
+      scale: 1.35,
+      anchor: new google.maps.Point(12, 22)
+    };
+  }
+
   function initMap(){
-    if(!window.L){mapEl.innerHTML='<p class="muted" style="display:flex;align-items:center;justify-content:center;height:100%">Map unavailable.</p>';return}
-    // Center on Jamaica
-    var map=L.map('vendorMap',{scrollWheelZoom:{focus:true},zoomControl:true,smoothWheelZoom:true,smoothSensitivity:1,zoomSnap:0.25,zoomDelta:0.5,wheelDebounceTime:40,inertia:true,inertiaDeceleration:3000,maxBounds:[[17.5,-78.6],[18.9,-76.2]],minZoom:7,maxZoom:18}).setView([18.2,-77.3],12);map.zoomControl.setPosition("bottomright");
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom:18,
-      attribution:'&copy; OpenStreetMap',
-      subdomains:'a b c'.split(' ')
-    }).addTo(map);
-
-    var goldIcon=L.divIcon({className:'',html:
-      '<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;background:#FFD700;border:2px solid #0A0A0A;'
-      +'transform:rotate(-45deg);box-shadow:0 2px 8px rgba(255,215,0,0.6)"></div>',
-      iconSize:[18,18],iconAnchor:[9,18],popupAnchor:[0,-18]});
-
-    var greenIcon=L.divIcon({className:'',html:
-      '<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;background:#40916C;border:2px solid #0A0A0A;'
-      +'transform:rotate(-45deg);box-shadow:0 2px 8px rgba(64,145,108,0.6)"></div>',
-      iconSize:[18,18],iconAnchor:[9,18],popupAnchor:[0,-18]});
+    if(!window.google||!window.google.maps){showFallback('Google Maps is unavailable right now.');return}
+    var map=new google.maps.Map(mapEl,{center:{lat:18.15,lng:-77.32},zoom:8,mapTypeControl:false,streetViewControl:false,fullscreenControl:true,gestureHandling:'cooperative',styles:[{elementType:'geometry',stylers:[{color:'#162118'}]},{elementType:'labels.text.fill',stylers:[{color:'#f5f0d7'}]},{elementType:'labels.text.stroke',stylers:[{color:'#0A0A0A'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0b2430'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#2D6A4F'}]},{featureType:'poi',elementType:'labels.text.fill',stylers:[{color:'#FFD700'}]}]});
+    var info=new google.maps.InfoWindow();
+    var bounds=new google.maps.LatLngBounds();
 
     fetch('/api/vendors?limit=6',{headers:{'Accept':'application/json'}})
       .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
       .then(function(res){
         var vendors=(res&&res.data)?res.data:[];
-        if(!vendors.length){
-          var note=L.popup().setLatLng([18.2,-77.3]).setContent('No vendors mapped yet.').openOn(map);return;
-        }
-        var bounds=[];
+        if(!vendors.length){showFallback('No vendors mapped yet.');return;}
         vendors.forEach(function(v){
-          var lat=parseFloat(v.location_lat),lng=parseFloat(v.location_lng);
+          var lat=parseFloat(v.latitude||v.location_lat),lng=parseFloat(v.longitude||v.location_lng);
           if(isNaN(lat)||isNaN(lng))return;
           var rating=parseFloat(v.avg_rating)||0;
-          var icon=rating>=4.5?goldIcon:greenIcon;
+          var icon=markerIcon(rating>=4.5?'#FFD700':'#40916C');
           var cat=CAT_LABELS[v.category]||(v.category||'');
           var stars='';
           for(var i=0;i<5;i++){stars+= i<Math.round(rating)?'\u2605':'\u2606'}
           var verified=v.verified?'<span style="color:#40916C;font-size:11px;font-weight:600">\u2713 Verified</span><br>':'';
-          var popup='<div style="font-family:Inter,sans-serif;min-width:160px">'
+          var q=encodeURIComponent(v.location_address||v.name+' Jamaica');
+          var popup='<div style="font-family:Inter,sans-serif;min-width:190px;color:#0A0A0A">'
             +'<strong style="font-size:15px;color:#0A0A0A">'+esc(v.name)+'</strong><br>'
             +'<span style="font-size:12px;color:#B8860B;text-transform:uppercase;font-weight:700;letter-spacing:0.06em">'+esc(cat)+'</span><br>'
             +verified
             +'<span style="color:#FFD700">'+stars+'</span> '
             +'<span style="font-size:12px;color:#6C757D">'+rating.toFixed(1)+'</span><br>'
             +'<span style="font-size:12px;color:#6C757D">'+esc(v.location_address||'Jamaica')+'</span>'
+            +'<br><a href="https://www.google.com/maps/search/?api=1&query='+q+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;color:#2D6A4F;font-weight:700">Open in Google Maps</a>'
             +'</div>';
-          var m=L.marker([lat,lng],{icon:icon}).addTo(map).bindPopup(popup);
-          bounds.push([lat,lng]);
+          var marker=new google.maps.Marker({position:{lat:lat,lng:lng},map:map,title:v.name,icon:icon});
+          marker.addListener('click',function(){info.setContent(popup);info.open(map,marker);});
+          bounds.extend(marker.getPosition());
         });
-        if(bounds.length>1){map.fitBounds(bounds,{padding:[40,40]})}
-        else if(bounds.length===1){map.setView(bounds[0],10)}
+        if(!bounds.isEmpty())map.fitBounds(bounds,{top:40,right:40,bottom:40,left:40});
       })
       .catch(function(err){
-        console.warn('[PatWaGo map] vendor fetch failed:',err);
-        mapEl.innerHTML='<p class="muted" style="display:flex;align-items:center;justify-content:center;height:100%">Couldn\'t load vendor locations.</p>';
+        console.warn('[PatWaGo Google map] vendor fetch failed:',err);
+        showFallback('Couldn\'t load vendor locations.');
       });
   }
 
-  // Load leaflet when map section scrolls into view (lazy)
+  function bootMap(){
+    fetch('/api/maps/config',{headers:{'Accept':'application/json'}})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+      .then(function(res){
+        var key=res&&res.data&&res.data.browser_key;
+        if(!key){showFallback('Google Maps is not configured yet.');return;}
+        window.initPatWaGoLandingMap=initMap;
+        loadScript('https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&callback=initPatWaGoLandingMap');
+      })
+      .catch(function(err){console.warn('[PatWaGo Google map] config failed:',err);showFallback('Google Maps config could not load.');});
+  }
+
   if('IntersectionObserver' in window){
     var io=new IntersectionObserver(function(entries){
       entries.forEach(function(en){
         if(en.isIntersecting){
           io.unobserve(mapEl);
-          loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',function(){loadScript('https://unpkg.com/leaflet.smoothwheelzoom@1.0.0/src/SmoothWheelZoom.js',initMap);});
+          bootMap();
         }
       });
     },{threshold:0.05});
     io.observe(mapEl);
   }else{
-    loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',function(){loadScript('https://unpkg.com/leaflet.smoothwheelzoom@1.0.0/src/SmoothWheelZoom.js',initMap);});
+    bootMap();
   }
 })();
 
