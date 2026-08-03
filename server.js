@@ -432,10 +432,23 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && pathname === '/api/vendors/smart-search') {
     const body = await readBody(req);
     const result = store.smartSearchVendors(body);
+    let googleItems = [];
+    try {
+      googleItems = await googleMaps.marketplaceSearch({ ...body, limit: 12 });
+    } catch (error) {
+      googleItems = [];
+    }
+    const seen = new Set(result.items.map((item) => String(item.name || '').toLowerCase()));
+    const merged = result.items.concat(googleItems.filter((item) => {
+      const key = String(item.name || '').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })).sort((a, b) => Number(b.smart_score || 0) - Number(a.smart_score || 0));
     return sendJson(res, 200, {
       ok: true,
-      data: result.items,
-      meta: { total: result.total, inferred_categories: result.inferred_categories, ai: 'local-smart-ranking' },
+      data: merged,
+      meta: { total: merged.length, local_total: result.total, google_total: googleItems.length, inferred_categories: result.inferred_categories, ai: 'local-smart-ranking+google-places' },
     });
   }
 
