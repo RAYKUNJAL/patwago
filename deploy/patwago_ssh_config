@@ -1,0 +1,10 @@
+# Add this block to the SSH config in the environment running Claude Code.
+# The IdentityFile must be the MATCHING PRIVATE KEY, not the public key.
+Host patwago-vps
+    HostName 5.78.105.83
+    User patwago-deploy
+    Port 22
+    IdentityFile ~/.ssh/claude-patwago-deploy
+    IdentitiesOnly yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3

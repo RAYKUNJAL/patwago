@@ -1,8 +1,16 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { URL } = require('node:url');
 const store = require('./lib/store');
+const appPages = require('./lib/app-pages');
+const aiAgent = require('./lib/ai-agent');
+const translator = require('./lib/translator');
+const analytics = require('./lib/analytics');
+const auth = require('./lib/auth');
+const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
+const customerData = require('./lib/customer-data');
 
 const ROOT = store.ROOT;
 const PORT = Number(process.env.PORT || 3000);
@@ -59,6 +67,31 @@ function readBody(req) {
     });
     req.on('error', reject);
   });
+}
+
+function readRawBody(req, maxBytes = 25_000_000) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function multipartAudio(audio, contentType) {
+  const boundary = `patwago-${Date.now().toString(16)}`;
+  const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="voice.webm"\r\nContent-Type: ${contentType || 'audio/webm'}\r\n\r\n`);
+  const model = Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${process.env.WHISPER_MODEL || 'Systran/faster-whisper-small'}\r\n--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\nen\r\n--${boundary}--\r\n`);
+  return { body: Buffer.concat([head, audio, model]), contentType: `multipart/form-data; boundary=${boundary}` };
 }
 
 function parseNumber(value, fallback) {
@@ -164,6 +197,69 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function timingSafeEqual(value, expected) {
+  const a = Buffer.from(String(value || ''));
+  const b = Buffer.from(String(expected || ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireAdmin(req, res) {
+  const expected = process.env.ADMIN_ANALYTICS_TOKEN || '';
+  if (!expected) {
+    sendJson(res, 503, { ok: false, message: 'Admin analytics is not configured' });
+    return false;
+  }
+  const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!timingSafeEqual(supplied, expected)) {
+    sendJson(res, 401, { ok: false, message: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+function bearerToken(req) {
+  const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (bearer) return bearer;
+  const cookies = String(req.headers.cookie || '').split(';').map((part) => part.trim().split('='));
+  const found = cookies.find((pair) => pair[0] === 'patwago_session');
+  return found ? decodeURIComponent(found.slice(1).join('=')) : '';
+}
+
+function setSessionCookie(res, token) {
+  res.setHeader('Set-Cookie', `patwago_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+}
+
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `patwago_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+}
+
+async function customerSession(req) {
+  const token = bearerToken(req);
+  if (!token) return null;
+  return auth.getSession(token);
+}
+
+async function requireCustomer(req, res, requirePass) {
+  const session = await customerSession(req);
+  if (!session) {
+    sendJson(res, 401, { ok: false, message: 'Sign in required' });
+    return null;
+  }
+  if (requirePass && !(await auth.hasActivePass(session.customer_id))) {
+    sendJson(res, 402, { ok: false, message: 'An active trial or pass is required', code: 'PASS_REQUIRED' });
+    return null;
+  }
+  return session;
+}
+
+function paypalService() {
+  return createPayPalService({ env: process.env, fetch: globalThis.fetch });
+}
+
+function shouldUseLocalCheckoutFallback(error) {
+  return process.env.NODE_ENV !== 'production' && /PayPal service requires/i.test(error.message || '');
+}
+
 async function handleApi(req, res, url) {
   const { pathname, searchParams } = url;
 
@@ -173,7 +269,119 @@ async function handleApi(req, res, url) {
       service: 'patwago',
       time: new Date().toISOString(),
       stats: store.dashboardStats(),
+      capabilities: {
+        grok: Boolean(process.env.XAI_API_KEY),
+        self_hosted_stt: Boolean(process.env.WHISPER_URL),
+        self_hosted_tts: Boolean(process.env.TTS_BASE_URL),
+      },
     });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/analytics/events') {
+    const body = await readBody(req);
+    try {
+      await analytics.record(body);
+      return sendJson(res, 202, { ok: true });
+    } catch (error) {
+      return sendJson(res, 400, { ok: false, message: error.message });
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/admin/analytics/summary') {
+    if (!requireAdmin(req, res)) return true;
+    return sendJson(res, 200, { ok: true, data: await analytics.summary(searchParams.get('days') || 30) });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/admin/analytics/events') {
+    if (!requireAdmin(req, res)) return true;
+    return sendJson(res, 200, { ok: true, data: await analytics.list({ limit: searchParams.get('limit'), name: searchParams.get('name'), since: searchParams.get('since') }) });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/account/register') {
+    const body = await readBody(req);
+    const customer = await auth.registerCustomer(body);
+    const session = await auth.createSession({ customer_id: customer.id });
+    const trial = await auth.createPass({ customer_id: customer.id, plan: 'trial' });
+    setSessionCookie(res, session.token);
+    await analytics.record({ name: 'signup_complete', session_id: session.token, anonymous_id: body.anonymous_id, properties: { success: true } });
+    return sendJson(res, 201, { ok: true, data: { customer, session, pass: trial } });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/account/login') {
+    const body = await readBody(req);
+    const customer = await auth.authenticateCustomer(body);
+    if (!customer) return sendJson(res, 401, { ok: false, message: 'Invalid email or password' });
+    const session = await auth.createSession({ customer_id: customer.id });
+    setSessionCookie(res, session.token);
+    const passes = await auth.listPasses(customer.id);
+    return sendJson(res, 200, { ok: true, data: { customer, session, passes, active_pass: await auth.hasActivePass(customer.id) } });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/account/me') {
+    const session = await requireCustomer(req, res, false);
+    if (!session) return true;
+    return sendJson(res, 200, { ok: true, data: { customer: await auth.getCustomerById(session.customer_id), passes: await auth.listPasses(session.customer_id), active_pass: await auth.hasActivePass(session.customer_id) } });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/account/logout') {
+    const token = bearerToken(req);
+    if (token) await auth.destroySession(token);
+    clearSessionCookie(res);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/voice/transcribe') {
+    const whisperUrl = process.env.WHISPER_URL || '';
+    if (!whisperUrl) return sendJson(res, 503, { ok: false, message: 'Self-hosted transcription is not configured' });
+    const audio = await readRawBody(req);
+    if (!audio.length) return sendJson(res, 400, { ok: false, message: 'Audio is required' });
+    const form = multipartAudio(audio, req.headers['content-type']);
+    const upstream = await fetch(`${whisperUrl.replace(/\/$/, '')}/v1/audio/transcriptions`, {
+      method: 'POST', headers: { 'Content-Type': form.contentType }, body: form.body, signal: AbortSignal.timeout(120_000),
+    });
+    const payload = await upstream.json();
+    if (!upstream.ok) return sendJson(res, 502, { ok: false, message: payload.detail || payload.error?.message || 'Transcription failed' });
+    return sendJson(res, 200, { ok: true, text: payload.text || '', data: payload });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/voice/speech') {
+    const body = await readBody(req);
+    const text = String(body.text || '').trim().slice(0, 15000);
+    if (!text) return sendJson(res, 400, { ok: false, message: 'text is required' });
+
+    if (process.env.XAI_API_KEY) {
+      const upstream = await fetch('https://api.x.ai/v1/tts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          voice_id: process.env.XAI_VOICE_ID || 'castor',
+          language: 'en',
+          speed: Number(process.env.XAI_VOICE_SPEED || 0.96),
+          text_normalization: true,
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (!upstream.ok) {
+        const detail = await upstream.text();
+        return sendJson(res, 502, { ok: false, message: `xAI speech failed: ${detail.slice(0, 400)}` });
+      }
+      return send(res, 200, Buffer.from(await upstream.arrayBuffer()), {
+        'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
+        'Cache-Control': 'no-store',
+        'X-Voice-Provider': 'xai',
+      });
+    }
+
+    const ttsUrl = process.env.TTS_BASE_URL || '';
+    if (!ttsUrl) return sendJson(res, 503, { ok: false, message: 'Expressive voice is not configured' });
+    const upstream = await fetch(`${ttsUrl.replace(/\/$/, '')}/v1/audio/speech`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: process.env.TTS_MODEL || 'chatterbox', voice: process.env.TTS_VOICE || 'jamaican-concierge', input: text, response_format: 'mp3' }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!upstream.ok) return sendJson(res, 502, { ok: false, message: 'Speech generation failed' });
+    return send(res, 200, Buffer.from(await upstream.arrayBuffer()), { 'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg', 'Cache-Control': 'no-store' });
   }
 
   if (req.method === 'GET' && pathname === '/api/vendors') {
@@ -184,6 +392,16 @@ async function handleApi(req, res, url) {
         category: searchParams.get('category') || undefined,
         q: searchParams.get('q') || undefined,
       }),
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/vendors/smart-search') {
+    const body = await readBody(req);
+    const result = store.smartSearchVendors(body);
+    return sendJson(res, 200, {
+      ok: true,
+      data: result.items,
+      meta: { total: result.total, inferred_categories: result.inferred_categories, ai: 'local-smart-ranking' },
     });
   }
 
@@ -217,23 +435,74 @@ async function handleApi(req, res, url) {
     });
   }
 
+  if (req.method === 'POST' && pathname === '/api/translate') {
+    const body = await readBody(req);
+    const text = String(body.text || '').trim();
+    if (!text) return sendJson(res, 400, { ok: false, message: 'text is required' });
+    try {
+      const result = await translator.translateWithGemini(text, body.from || 'en', body.to || 'patois');
+      return sendJson(res, 200, { ok: true, data: result });
+    } catch (error) {
+      return sendJson(res, 503, {
+        ok: false,
+        message: `AI translation unavailable: ${error.message}`,
+        fallback: store.translate(text),
+      });
+    }
+  }
+
   if (req.method === 'GET' && pathname === '/api/trips') {
-    return sendJson(res, 200, {
-      ok: true,
-      data: store.listTrips(),
-    });
+    const session = await requireCustomer(req, res, true);
+    if (!session) return true;
+    return sendJson(res, 200, { ok: true, data: await customerData.listTrips(session.customer_id) });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/ai/itinerary') {
+    const session = await requireCustomer(req, res, true);
+    if (!session) return true;
+    const body = await readBody(req);
+    const itinerary = await aiAgent.generateItinerary(body);
+    return sendJson(res, 200, { ok: true, data: itinerary });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/ai/itinerary/save') {
+    const session = await requireCustomer(req, res, true);
+    if (!session) return true;
+    const body = await readBody(req);
+    if (!body.itinerary) return sendJson(res, 400, { ok: false, message: 'itinerary is required' });
+    const trip = await customerData.createTrip(session.customer_id, { title:body.itinerary.title, destination:body.profile?.location||'Jamaica', days:body.itinerary.days?.length||1, notes:body.itinerary.overview, items:(body.itinerary.days||[]).flatMap((day)=>(day.stops||[]).map((stop)=>({title:`Day ${day.day}: ${stop.place_name}`,note:`${stop.time} · ${stop.reason}`,place_id:stop.place_id,done:false}))) });
+    return sendJson(res, 201, { ok: true, data: trip });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/ai/concierge') {
+    const session = await requireCustomer(req, res, true);
+    if (!session) return true;
+    const body = await readBody(req);
+    const sessionId = String(body.session_id || 'default').slice(0, 120);
+    const userTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'user', content: body.message, source: body.source || 'text' });
+    const history = (await customerData.listTranscripts(session.customer_id,sessionId)).slice(-9);
+    const answer = await aiAgent.conciergeReply(body.message, history.slice(0, -1));
+    const assistantTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'assistant', content: answer.reply, source: answer.source });
+    return sendJson(res, 200, { ok: true, data: { ...answer, turns: [userTurn, assistantTurn] } });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/ai/transcripts') {
+    const session = await requireCustomer(req, res, true); if (!session) return true;
+    return sendJson(res, 200, { ok: true, data: await customerData.listTranscripts(session.customer_id,searchParams.get('session_id')||'default') });
   }
 
   if (req.method === 'POST' && pathname === '/api/trips') {
+    const session = await requireCustomer(req, res, true); if (!session) return true;
     const body = await readBody(req);
-    const trip = store.createTrip(body);
+    const trip = await customerData.createTrip(session.customer_id,body);
     return sendJson(res, 201, { ok: true, data: trip });
   }
 
   if (req.method === 'POST' && /^\/api\/trips\/[^/]+\/items$/.test(pathname)) {
+    const session = await requireCustomer(req, res, true); if (!session) return true;
     const tripId = decodeURIComponent(pathname.split('/')[3]);
     const body = await readBody(req);
-    const result = store.addTripItem(tripId, body);
+    const result = await customerData.addTripItem(session.customer_id,tripId,body);
     if (!result) return sendJson(res, 404, { ok: false, message: 'Trip not found' });
     return sendJson(res, 201, { ok: true, data: result });
   }
@@ -257,15 +526,14 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && pathname === '/api/guardian/checkins') {
-    return sendJson(res, 200, {
-      ok: true,
-      data: store.listGuardianCheckins(),
-    });
+    const session=await requireCustomer(req,res,true);if(!session)return true;
+    return sendJson(res,200,{ok:true,data:await customerData.listCheckins(session.customer_id)});
   }
 
   if (req.method === 'POST' && pathname === '/api/guardian/checkins') {
+    const session=await requireCustomer(req,res,true);if(!session)return true;
     const body = await readBody(req);
-    const checkin = store.createGuardianCheckin(body);
+    const checkin = await customerData.createCheckin(session.customer_id,body);
     return sendJson(res, 201, { ok: true, data: checkin });
   }
 
@@ -280,33 +548,34 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/paypal/purchase-pass') {
-    const body = await readBody(req);
-    const order = store.createPaymentOrder(body);
-    return sendJson(res, 201, {
-      ok: true,
-      approval_url: order.approval_url,
-      approvalUrl: order.approval_url,
-      order_id: order.id,
-      orderId: order.id,
-      data: order,
-      environment: 'local-demo',
-    });
+    const session=await requireCustomer(req,res,false);if(!session)return true;
+    const body=await readBody(req);
+    let order;
+    try {
+      order=await paypalService().createOrder({plan:body.plan,return_url:body.return_url,cancel_url:body.cancel_url});
+    } catch (error) {
+      if (!shouldUseLocalCheckoutFallback(error)) throw error;
+      const plan=String(body.plan || '').trim();
+      if (!Object.prototype.hasOwnProperty.call(PLAN_PRICES, plan)) return sendJson(res,400,{ok:false,message:`Unknown plan: ${plan}`});
+      order=store.createPaymentOrder({plan,amount:PLAN_PRICES[plan],description:body.description || `${plan} pass`,buyer:session.customer_id});
+    }
+    return sendJson(res,201,{ok:true,approval_url:order.approval_url,approvalUrl:order.approval_url,order_id:order.order_id,orderId:order.order_id,data:order,environment:order.environment});
   }
 
   if (req.method === 'POST' && /^\/api\/paypal\/orders\/[^/]+\/capture$/.test(pathname)) {
-    const orderId = decodeURIComponent(pathname.split('/')[4]);
-    let body = {};
-    try {
-      body = await readBody(req);
-    } catch {
-      body = {};
-    }
-    const order = store.capturePayment(orderId, body);
-    if (!order) return sendJson(res, 404, { ok: false, message: 'Order not found' });
-    if (req.headers.accept && req.headers.accept.includes('text/html')) {
-      return sendHtml(res, 200, `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PatWaGo payment complete</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0A0A0A;color:#fff;font-family:Inter,system-ui,sans-serif}.card{max-width:520px;background:rgba(20,20,20,.8);border:1px solid rgba(255,215,0,.2);border-radius:24px;padding:32px}.btn{display:inline-flex;padding:12px 18px;border-radius:999px;background:#FFD700;color:#0A0A0A;text-decoration:none;font-weight:700}</style></head><body><div class="card"><h1>Payment complete</h1><p>Your ${escapeHtml(order.plan)} pass has been captured.</p><a class="btn" href="/">Return to PatWaGo</a></div></body></html>`);
-    }
-    return sendJson(res, 200, { ok: true, data: order });
+    const session=await requireCustomer(req,res,false);if(!session)return true;
+    const orderId=decodeURIComponent(pathname.split('/')[4]);
+    const payment=await paypalService().captureOrder(orderId);
+    if(payment.status!=='completed')return sendJson(res,409,{ok:false,message:'PayPal payment is not completed',data:payment});
+    const pass=await auth.createPass({customer_id:session.customer_id,plan:payment.plan});
+    return sendJson(res,200,{ok:true,data:{...payment,pass}});
+  }
+
+  if(req.method==='POST'&&pathname==='/api/paypal/webhook'){
+    const raw=await readRawBody(req,1_000_000);
+    const result=await paypalService().verifyWebhook({headers:req.headers,body:raw.toString('utf8')});
+    if(!result.verified)return sendJson(res,400,{ok:false,message:result.reason||'Invalid webhook signature'});
+    return sendJson(res,200,{ok:true});
   }
 
   if (req.method === 'GET' && pathname === '/api/dashboard') {
@@ -325,6 +594,31 @@ function handleCheckout(req, res, url) {
   const order = store.getPaymentOrder(match[1]);
   if (!order) return sendText(res, 404, 'Checkout order not found');
   return sendHtml(res, 200, renderCheckoutPage(order));
+}
+
+function handleAppPages(req, res, url) {
+  if (req.method !== 'GET') return null;
+  const pathname = url.pathname.replace(/\/$/, '') || '/';
+  let html = null;
+  if (pathname === '/admin/analytics') html = appPages.adminAnalyticsPage();
+  else if (pathname === '/account' || pathname === '/account/onboarding') html = appPages.accountPage('onboarding');
+  else if (pathname === '/account/login') html = appPages.accountPage('auth');
+  else if (pathname === '/account/paywall') html = appPages.accountPage('trial');
+  else if (pathname === '/app') html = appPages.dashboard();
+  else if (pathname === '/app/translate') html = appPages.translatePage();
+  else if (pathname === '/app/vendors') html = appPages.vendorsPage();
+  else if (pathname === '/app/trips') html = appPages.tripsPage();
+  else if (pathname === '/app/trips/new') html = appPages.aiPlannerPage();
+  else if (pathname === '/app/voice') html = appPages.voicePage();
+  else if (pathname === '/app/guardian') html = appPages.guardianPage();
+  else if (pathname === '/app/profile') html = appPages.profilePage();
+  else {
+    const match = pathname.match(/^\/app\/vendor\/([^/]+)$/);
+    if (match) html = appPages.vendorDetailPage(decodeURIComponent(match[1]));
+  }
+  if (html) return sendHtml(res, 200, html);
+  if (pathname.startsWith('/app/')) return sendText(res, 404, 'App page not found');
+  return null;
 }
 
 function handleStatic(req, res, url) {
@@ -363,6 +657,9 @@ async function requestListener(req, res) {
 
   if (handleStatic(req, res, url)) return;
 
+  const appPage = handleAppPages(req, res, url);
+  if (appPage) return;
+
   if (req.method === 'GET') {
     return serveFile(res, INDEX_PATH) || sendText(res, 404, 'Not found');
   }
@@ -376,6 +673,7 @@ function createServer() {
 
 if (require.main === module) {
   const server = createServer();
+  analytics.ensureSchema().catch((error) => console.error('[analytics] schema initialization failed', error.message));
   server.listen(PORT, HOST, () => {
     console.log(`PatWaGo backend listening on http://${HOST}:${PORT}`);
   });

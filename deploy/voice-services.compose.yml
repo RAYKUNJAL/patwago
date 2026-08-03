@@ -1,0 +1,17 @@
+services:
+  speaches:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    container_name: patwago-speaches
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8969:8000"
+    volumes:
+      - speaches-models:/home/ubuntu/.cache/huggingface/hub
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: patwago-kokoro
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8880:8880"
+volumes:
+  speaches-models:

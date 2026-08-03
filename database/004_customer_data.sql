@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS customer_trips(id text PRIMARY KEY,customer_id text NOT NULL REFERENCES auth_customers(id) ON DELETE CASCADE,title text NOT NULL,destination text NOT NULL,days integer NOT NULL DEFAULT 1,start_date text,notes text,items jsonb NOT NULL DEFAULT '[]'::jsonb,created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS customer_trips_owner_idx ON customer_trips(customer_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS customer_checkins(id text PRIMARY KEY,customer_id text NOT NULL REFERENCES auth_customers(id) ON DELETE CASCADE,traveler_name text NOT NULL,contact text NOT NULL,hours integer NOT NULL,note text,state text NOT NULL DEFAULT 'scheduled',created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS customer_checkins_owner_idx ON customer_checkins(customer_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS customer_transcripts(id text PRIMARY KEY,customer_id text NOT NULL REFERENCES auth_customers(id) ON DELETE CASCADE,session_id text NOT NULL,role text NOT NULL,content text NOT NULL,source text,created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS customer_transcripts_owner_idx ON customer_transcripts(customer_id,session_id,created_at);
