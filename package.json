@@ -8,7 +8,7 @@
     "dev": "node server.js",
     "start": "node server.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
-    "check": "node --check server.js && node --check lib/store.js && node --check lib/app-pages.js && node --check lib/ai-agent.js && node --check lib/translator.js && node --check lib/analytics.js && node --check public/app/analytics.js && node --check public/app/admin.js && node --check public/app/app.js && node --check tests/api.test.js"
+    "check": "node scripts/check-syntax.js"
   },
   "engines": {
     "node": ">=20"

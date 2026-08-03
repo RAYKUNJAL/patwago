@@ -11,6 +11,8 @@ const analytics = require('./lib/analytics');
 const auth = require('./lib/auth');
 const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
 const customerData = require('./lib/customer-data');
+const payments = require('./lib/payments');
+const { createRateLimiter } = require('./lib/rate-limit');
 
 const ROOT = store.ROOT;
 const PORT = Number(process.env.PORT || 3000);
@@ -99,12 +101,14 @@ function parseNumber(value, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeStaticPath(urlPath) {
+function normalizeStaticPath(urlPath, baseDir = ROOT) {
   const cleaned = decodeURIComponent(urlPath)
     .replace(/\\/g, '/')
     .replace(/^\/+/, '');
-  const candidate = path.normalize(path.join(ROOT, cleaned));
-  if (!candidate.startsWith(ROOT)) {
+  const normalizedBase = path.normalize(baseDir);
+  const candidate = path.normalize(path.join(normalizedBase, cleaned));
+  const baseWithSep = normalizedBase.endsWith(path.sep) ? normalizedBase : `${normalizedBase}${path.sep}`;
+  if (candidate !== normalizedBase && !candidate.startsWith(baseWithSep)) {
     return null;
   }
   return candidate;
@@ -260,6 +264,32 @@ function shouldUseLocalCheckoutFallback(error) {
   return process.env.NODE_ENV !== 'production' && /PayPal service requires/i.test(error.message || '');
 }
 
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return String(forwarded).split(',')[0].trim();
+  return req.socket.remoteAddress || 'unknown';
+}
+
+const loginLimiter = createRateLimiter({
+  windowMs: Number(process.env.LOGIN_RATE_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.LOGIN_RATE_MAX || 10),
+});
+
+const registerLimiter = createRateLimiter({
+  windowMs: Number(process.env.REGISTER_RATE_WINDOW_MS || 60 * 60 * 1000),
+  max: Number(process.env.REGISTER_RATE_MAX || 20),
+});
+
+function rateLimited(res, limiter, key) {
+  const result = limiter.check(key);
+  if (!result.allowed) {
+    res.setHeader('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
+    sendJson(res, 429, { ok: false, message: 'Too many attempts. Please try again shortly.' });
+    return true;
+  }
+  return false;
+}
+
 async function handleApi(req, res, url) {
   const { pathname, searchParams } = url;
 
@@ -298,6 +328,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/account/register') {
+    if (rateLimited(res, registerLimiter, `register:${clientIp(req)}`)) return true;
     const body = await readBody(req);
     const customer = await auth.registerCustomer(body);
     const session = await auth.createSession({ customer_id: customer.id });
@@ -308,6 +339,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/account/login') {
+    if (rateLimited(res, loginLimiter, `login:${clientIp(req)}`)) return true;
     const body = await readBody(req);
     const customer = await auth.authenticateCustomer(body);
     if (!customer) return sendJson(res, 401, { ok: false, message: 'Invalid email or password' });
@@ -553,6 +585,7 @@ async function handleApi(req, res, url) {
     let order;
     try {
       order=await paypalService().createOrder({plan:body.plan,return_url:body.return_url,cancel_url:body.cancel_url});
+      await payments.recordOrderCreated({order_id:order.order_id,plan:order.plan,amount:order.amount,currency:order.currency,customer_id:session.customer_id});
     } catch (error) {
       if (!shouldUseLocalCheckoutFallback(error)) throw error;
       const plan=String(body.plan || '').trim();
@@ -566,8 +599,11 @@ async function handleApi(req, res, url) {
     const session=await requireCustomer(req,res,false);if(!session)return true;
     const orderId=decodeURIComponent(pathname.split('/')[4]);
     const payment=await paypalService().captureOrder(orderId);
+    const { wasAlreadyCompleted }=await payments.recordCapture(payment,{customer_id:session.customer_id});
     if(payment.status!=='completed')return sendJson(res,409,{ok:false,message:'PayPal payment is not completed',data:payment});
-    const pass=await auth.createPass({customer_id:session.customer_id,plan:payment.plan});
+    const pass=wasAlreadyCompleted
+      ? (await auth.listPasses(session.customer_id)).find((p)=>p.plan===payment.plan)||null
+      : await auth.createPass({customer_id:session.customer_id,plan:payment.plan});
     return sendJson(res,200,{ok:true,data:{...payment,pass}});
   }
 
@@ -575,6 +611,26 @@ async function handleApi(req, res, url) {
     const raw=await readRawBody(req,1_000_000);
     const result=await paypalService().verifyWebhook({headers:req.headers,body:raw.toString('utf8')});
     if(!result.verified)return sendJson(res,400,{ok:false,message:result.reason||'Invalid webhook signature'});
+    const event=result.event||{};
+    if(event.event_type==='PAYMENT.CAPTURE.COMPLETED'){
+      const { orderId, captureId }=payments.extractIdsFromCaptureEvent(event);
+      if(orderId){
+        const known=await payments.getByOrderId(orderId);
+        if(known&&known.status!=='completed'){
+          const resource=event.resource||{};
+          const amountValue=resource.amount?.value?Number(resource.amount.value):known.amount;
+          const capturedPayment={
+            status:'completed',paypal_order_id:orderId,plan:known.plan,amount:amountValue,
+            currency:resource.amount?.currency_code||known.currency,capture_id:captureId,
+            payer_email:known.payer_email,payer_id:known.payer_id,captured_at:new Date().toISOString(),
+            pass_activated:{activated:true,plan:known.plan,pass_type:`${known.plan}_pass`,capture_id:captureId,activated_at:new Date().toISOString()},
+            paypal_raw:event,
+          };
+          await payments.recordCapture(capturedPayment,{customer_id:known.customer_id});
+          if(known.customer_id)await auth.createPass({customer_id:known.customer_id,plan:known.plan});
+        }
+      }
+    }
     return sendJson(res,200,{ok:true});
   }
 
@@ -629,10 +685,10 @@ function handleStatic(req, res, url) {
     return serveFile(res, INDEX_PATH) || false;
   }
 
-  const publicCandidate = path.join(PUBLIC_DIR, pathname.replace(/^\//, ''));
-  if (serveFile(res, publicCandidate)) return true;
+  const publicCandidate = normalizeStaticPath(pathname, PUBLIC_DIR);
+  if (publicCandidate && serveFile(res, publicCandidate)) return true;
 
-  const rootCandidate = normalizeStaticPath(pathname);
+  const rootCandidate = normalizeStaticPath(pathname, ROOT);
   if (rootCandidate && serveFile(res, rootCandidate)) return true;
 
   return false;
@@ -674,6 +730,7 @@ function createServer() {
 if (require.main === module) {
   const server = createServer();
   analytics.ensureSchema().catch((error) => console.error('[analytics] schema initialization failed', error.message));
+  payments.ensureSchema().catch((error) => console.error('[payments] schema initialization failed', error.message));
   server.listen(PORT, HOST, () => {
     console.log(`PatWaGo backend listening on http://${HOST}:${PORT}`);
   });

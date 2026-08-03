@@ -87,25 +87,35 @@ test('registerCustomer normalizes email to lowercase and trims whitespace', asyn
 
 test('registerCustomer rejects duplicate email', async () => {
   const auth = loadFreshAuth();
-  await auth.registerCustomer({ email: 'dup@example.com', password: 'pw1', name: 'A' });
+  await auth.registerCustomer({ email: 'dup@example.com', password: 'password-one', name: 'A' });
   await assert.rejects(
-    () => auth.registerCustomer({ email: 'DUP@example.com', password: 'pw2', name: 'B' }),
+    () => auth.registerCustomer({ email: 'DUP@example.com', password: 'password-two', name: 'B' }),
     /exist|duplicate|already/i,
   );
 });
 
 test('registerCustomer rejects invalid input', async () => {
   const auth = loadFreshAuth();
-  await assert.rejects(() => auth.registerCustomer({ email: '', password: 'pw' }), /email/i);
-  await assert.rejects(() => auth.registerCustomer({ email: 'not-an-email', password: 'pw' }), /email/i);
+  await assert.rejects(() => auth.registerCustomer({ email: '', password: 'password' }), /email/i);
+  await assert.rejects(() => auth.registerCustomer({ email: 'not-an-email', password: 'password' }), /email/i);
   await assert.rejects(() => auth.registerCustomer({ email: 'ok@example.com', password: '' }), /password/i);
-  await assert.rejects(() => auth.registerCustomer({ email: 'ok@example.com', password: 'pw', name: '' }), /name/i);
+  await assert.rejects(() => auth.registerCustomer({ email: 'ok@example.com', password: 'password', name: '' }), /name/i);
+});
+
+test('registerCustomer enforces minimum password length', async () => {
+  const auth = loadFreshAuth();
+  await assert.rejects(
+    () => auth.registerCustomer({ email: 'short@example.com', password: 'seven77', name: 'Short' }),
+    /at least 8/i,
+  );
+  const customer = await auth.registerCustomer({ email: 'eight@example.com', password: 'eight888', name: 'Eight' });
+  assert.equal(customer.email, 'eight@example.com');
 });
 
 test('authenticateCustomer returns customer (without hash) on valid credentials', async () => {
   const auth = loadFreshAuth();
-  await auth.registerCustomer({ email: 'ray@example.com', password: 'correct', name: 'Ray' });
-  const customer = await auth.authenticateCustomer({ email: 'ray@example.com', password: 'correct' });
+  await auth.registerCustomer({ email: 'ray@example.com', password: 'correct-password', name: 'Ray' });
+  const customer = await auth.authenticateCustomer({ email: 'ray@example.com', password: 'correct-password' });
   assert.ok(customer, 'returns a customer');
   assert.equal(customer.email, 'ray@example.com');
   assert.equal(customer.password_hash, undefined, 'hash not leaked on auth result');
@@ -114,7 +124,7 @@ test('authenticateCustomer returns customer (without hash) on valid credentials'
 
 test('authenticateCustomer returns null on wrong password', async () => {
   const auth = loadFreshAuth();
-  await auth.registerCustomer({ email: 'ray@example.com', password: 'correct', name: 'Ray' });
+  await auth.registerCustomer({ email: 'ray@example.com', password: 'correct-password', name: 'Ray' });
   const result = await auth.authenticateCustomer({ email: 'ray@example.com', password: 'wrong' });
   assert.equal(result, null);
 });
@@ -133,7 +143,7 @@ test('authenticateCustomer rejects missing fields', async () => {
 
 test('createSession returns an opaque token and resolves via getSession', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 's@example.com', password: 'pw', name: 'S' });
+  const reg = await auth.registerCustomer({ email: 's@example.com', password: 'password', name: 'S' });
   const session = await auth.createSession({ customer_id: reg.id });
   assert.ok(session.token, 'session has an opaque token');
   assert.ok(session.token.length >= 32, 'token is reasonably long');
@@ -161,7 +171,7 @@ test('getSession returns null for empty token', async () => {
 
 test('destroySession removes an active session', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'd@example.com', password: 'pw', name: 'D' });
+  const reg = await auth.registerCustomer({ email: 'd@example.com', password: 'password', name: 'D' });
   const session = await auth.createSession({ customer_id: reg.id });
   assert.ok(await auth.getSession(session.token));
   await auth.destroySession(session.token);
@@ -172,7 +182,7 @@ test('destroySession removes an active session', async () => {
 
 test('createPass issues a trial pass with correct expiry', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 't@example.com', password: 'pw', name: 'T' });
+  const reg = await auth.registerCustomer({ email: 't@example.com', password: 'password', name: 'T' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'trial' });
   assert.equal(pass.plan, 'trial');
   assert.equal(pass.status, 'active');
@@ -188,7 +198,7 @@ test('createPass issues a trial pass with correct expiry', async () => {
 
 test('createPass issues a day pass with correct expiry', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'd@example.com', password: 'pw', name: 'D' });
+  const reg = await auth.registerCustomer({ email: 'd@example.com', password: 'password', name: 'D' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'day' });
   assert.equal(pass.plan, 'day');
   const expiry = new Date(pass.expires_at).getTime();
@@ -196,9 +206,19 @@ test('createPass issues a day pass with correct expiry', async () => {
   assert.ok(expiry - Date.now() < 86400000 * 1.5, 'day pass not over 1.5 days');
 });
 
+test('createPass issues a week pass with fixed seven-day expiry', async () => {
+  const auth = loadFreshAuth();
+  const reg = await auth.registerCustomer({ email: 'week@example.com', password: 'password', name: 'W' });
+  const pass = await auth.createPass({ customer_id: reg.id, plan: 'week' });
+  assert.equal(pass.plan, 'week');
+  const expiry = new Date(pass.expires_at).getTime();
+  assert.ok(expiry - Date.now() > 6 * 86400000, 'week pass lower bound');
+  assert.ok(expiry - Date.now() < 8 * 86400000, 'week pass upper bound');
+});
+
 test('createPass issues a trip pass with correct expiry', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'p@example.com', password: 'pw', name: 'P' });
+  const reg = await auth.registerCustomer({ email: 'p@example.com', password: 'password', name: 'P' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'trip', trip_days: 5 });
   assert.equal(pass.plan, 'trip');
   const expiry = new Date(pass.expires_at).getTime();
@@ -209,7 +229,7 @@ test('createPass issues a trip pass with correct expiry', async () => {
 
 test('createPass trip pass defaults trip_days to 7', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'q@example.com', password: 'pw', name: 'Q' });
+  const reg = await auth.registerCustomer({ email: 'q@example.com', password: 'password', name: 'Q' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'trip' });
   const expiry = new Date(pass.expires_at).getTime();
   assert.ok(expiry - Date.now() > 6 * 86400000, 'default trip ~7 days lower');
@@ -218,7 +238,7 @@ test('createPass trip pass defaults trip_days to 7', async () => {
 
 test('createPass rejects unknown plan', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'x@example.com', password: 'pw', name: 'X' });
+  const reg = await auth.registerCustomer({ email: 'x@example.com', password: 'password', name: 'X' });
   await assert.rejects(() => auth.createPass({ customer_id: reg.id, plan: 'lifetime' }), /plan/i);
 });
 
@@ -229,7 +249,7 @@ test('createPass rejects missing customer_id', async () => {
 
 test('getPassStatus reports active for a fresh pass', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'g@example.com', password: 'pw', name: 'G' });
+  const reg = await auth.registerCustomer({ email: 'g@example.com', password: 'password', name: 'G' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'day' });
   const status = await auth.getPassStatus(pass.id);
   assert.equal(status.status, 'active');
@@ -240,7 +260,7 @@ test('getPassStatus reports active for a fresh pass', async () => {
 
 test('getPassStatus reports expired for a past pass', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'e@example.com', password: 'pw', name: 'E' });
+  const reg = await auth.registerCustomer({ email: 'e@example.com', password: 'password', name: 'E' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'trial' });
   // Force expiry into the past in the underlying store.
   await auth._expirePassForTest(pass.id);
@@ -257,7 +277,7 @@ test('getPassStatus returns null for unknown pass', async () => {
 
 test('hasActivePass returns true for a customer with an active pass', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'h@example.com', password: 'pw', name: 'H' });
+  const reg = await auth.registerCustomer({ email: 'h@example.com', password: 'password', name: 'H' });
   assert.equal(await auth.hasActivePass(reg.id), false, 'no pass yet');
   await auth.createPass({ customer_id: reg.id, plan: 'day' });
   assert.equal(await auth.hasActivePass(reg.id), true);
@@ -265,7 +285,7 @@ test('hasActivePass returns true for a customer with an active pass', async () =
 
 test('hasActivePass returns false when all passes are expired', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'i@example.com', password: 'pw', name: 'I' });
+  const reg = await auth.registerCustomer({ email: 'i@example.com', password: 'password', name: 'I' });
   const pass = await auth.createPass({ customer_id: reg.id, plan: 'trial' });
   await auth._expirePassForTest(pass.id);
   assert.equal(await auth.hasActivePass(reg.id), false);
@@ -273,7 +293,7 @@ test('hasActivePass returns false when all passes are expired', async () => {
 
 test('listPasses returns all passes for a customer, newest first', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'l@example.com', password: 'pw', name: 'L' });
+  const reg = await auth.registerCustomer({ email: 'l@example.com', password: 'password', name: 'L' });
   await auth.createPass({ customer_id: reg.id, plan: 'trial' });
   await auth.createPass({ customer_id: reg.id, plan: 'day' });
   const passes = await auth.listPasses(reg.id);
@@ -283,8 +303,8 @@ test('listPasses returns all passes for a customer, newest first', async () => {
 
 test('listPasses ignores passes that belong to a different customer', async () => {
   const auth = loadFreshAuth();
-  const a = await auth.registerCustomer({ email: 'a@example.com', password: 'pw', name: 'A' });
-  const b = await auth.registerCustomer({ email: 'b@example.com', password: 'pw', name: 'B' });
+  const a = await auth.registerCustomer({ email: 'a@example.com', password: 'password', name: 'A' });
+  const b = await auth.registerCustomer({ email: 'b@example.com', password: 'password', name: 'B' });
   await auth.createPass({ customer_id: a.id, plan: 'trial' });
   await auth.createPass({ customer_id: b.id, plan: 'day' });
   const passes = await auth.listPasses(a.id);
@@ -294,8 +314,8 @@ test('listPasses ignores passes that belong to a different customer', async () =
 
 test('ownsPass returns true only when the pass belongs to the customer', async () => {
   const auth = loadFreshAuth();
-  const a = await auth.registerCustomer({ email: 'o1@example.com', password: 'pw', name: 'A' });
-  const b = await auth.registerCustomer({ email: 'o2@example.com', password: 'pw', name: 'B' });
+  const a = await auth.registerCustomer({ email: 'o1@example.com', password: 'password', name: 'A' });
+  const b = await auth.registerCustomer({ email: 'o2@example.com', password: 'password', name: 'B' });
   const pass = await auth.createPass({ customer_id: a.id, plan: 'trial' });
   assert.equal(await auth.ownsPass(a.id, pass.id), true);
   assert.equal(await auth.ownsPass(b.id, pass.id), false);
@@ -304,8 +324,8 @@ test('ownsPass returns true only when the pass belongs to the customer', async (
 
 test('ownsSession returns true only when the session belongs to the customer', async () => {
   const auth = loadFreshAuth();
-  const a = await auth.registerCustomer({ email: 's1@example.com', password: 'pw', name: 'A' });
-  const b = await auth.registerCustomer({ email: 's2@example.com', password: 'pw', name: 'B' });
+  const a = await auth.registerCustomer({ email: 's1@example.com', password: 'password', name: 'A' });
+  const b = await auth.registerCustomer({ email: 's2@example.com', password: 'password', name: 'B' });
   const session = await auth.createSession({ customer_id: a.id });
   assert.equal(await auth.ownsSession(a.id, session.token), true);
   assert.equal(await auth.ownsSession(b.id, session.token), false);
@@ -314,7 +334,7 @@ test('ownsSession returns true only when the session belongs to the customer', a
 
 test('getCustomerByEmail retrieves a customer by email (without hash)', async () => {
   const auth = loadFreshAuth();
-  await auth.registerCustomer({ email: 'find@example.com', password: 'pw', name: 'F' });
+  await auth.registerCustomer({ email: 'find@example.com', password: 'password', name: 'F' });
   const customer = await auth.getCustomerByEmail('FIND@example.com');
   assert.ok(customer);
   assert.equal(customer.email, 'find@example.com');
@@ -325,7 +345,7 @@ test('getCustomerByEmail retrieves a customer by email (without hash)', async ()
 
 test('getCustomerById retrieves a customer by id (without hash)', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'id@example.com', password: 'pw', name: 'I' });
+  const reg = await auth.registerCustomer({ email: 'id@example.com', password: 'password', name: 'I' });
   const customer = await auth.getCustomerById(reg.id);
   assert.ok(customer);
   assert.equal(customer.id, reg.id);
@@ -335,27 +355,33 @@ test('getCustomerById retrieves a customer by id (without hash)', async () => {
 
 test('updateCustomer updates allowed fields and rehashes password', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'u@example.com', password: 'oldpw', name: 'U' });
-  const updated = await auth.updateCustomer(reg.id, { name: 'Updated', password: 'newpw' });
+  const reg = await auth.registerCustomer({ email: 'u@example.com', password: 'old-password', name: 'U' });
+  const updated = await auth.updateCustomer(reg.id, { name: 'Updated', password: 'new-password' });
   assert.equal(updated.name, 'Updated');
   assert.equal(updated.email, 'u@example.com');
   assert.equal(updated.password, undefined);
   assert.equal(updated.password_hash, undefined, 'hash not leaked on update result');
   // Behavior proves rehashing: old password fails, new password works.
-  const withOld = await auth.authenticateCustomer({ email: 'u@example.com', password: 'oldpw' });
+  const withOld = await auth.authenticateCustomer({ email: 'u@example.com', password: 'old-password' });
   assert.equal(withOld, null);
-  const withNew = await auth.authenticateCustomer({ email: 'u@example.com', password: 'newpw' });
+  const withNew = await auth.authenticateCustomer({ email: 'u@example.com', password: 'new-password' });
   assert.ok(withNew);
 });
 
 test('updateCustomer ignores empty password (keeps existing hash)', async () => {
   const auth = loadFreshAuth();
-  const reg = await auth.registerCustomer({ email: 'keep@example.com', password: 'pw', name: 'K' });
+  const reg = await auth.registerCustomer({ email: 'keep@example.com', password: 'password', name: 'K' });
   const updated = await auth.updateCustomer(reg.id, { name: 'K2' });
   assert.equal(updated.name, 'K2');
   // Behavior: original password still works after update with no new password.
-  const stillWorks = await auth.authenticateCustomer({ email: 'keep@example.com', password: 'pw' });
+  const stillWorks = await auth.authenticateCustomer({ email: 'keep@example.com', password: 'password' });
   assert.ok(stillWorks, 'original password still authenticates when update omits password');
+});
+
+test('updateCustomer rejects short password updates', async () => {
+  const auth = loadFreshAuth();
+  const reg = await auth.registerCustomer({ email: 'short-update@example.com', password: 'password', name: 'S' });
+  await assert.rejects(() => auth.updateCustomer(reg.id, { password: 'short7' }), /at least 8/i);
 });
 
 test('updateCustomer rejects unknown customer', async () => {

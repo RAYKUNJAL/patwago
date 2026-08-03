@@ -22,6 +22,8 @@ function loadFreshServer(dataDir) {
   delete require.cache[require.resolve('../lib/auth')];
   delete require.cache[require.resolve('../lib/customer-data')];
   delete require.cache[require.resolve('../lib/analytics')];
+  delete require.cache[require.resolve('../lib/payments')];
+  delete require.cache[require.resolve('../lib/rate-limit')];
   delete require.cache[require.resolve('../lib/ai-agent')];
   delete require.cache[require.resolve('../lib/app-pages')];
   delete require.cache[require.resolve('../server')];
@@ -113,6 +115,48 @@ test('behavioral analytics records allowlisted events and protects owner dashboa
   } finally {
     if (priorToken === undefined) delete process.env.ADMIN_ANALYTICS_TOKEN;
     else process.env.ADMIN_ANALYTICS_TOKEN = priorToken;
+  }
+});
+
+test('account registration rejects short passwords server-side', async () => {
+  await withServer(async ({ base }) => {
+    const response = await fetch(`${base}/api/account/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Short Password', email: 'short-password@example.com', password: 'seven77' }),
+    });
+    assert.equal(response.status, 500);
+    const payload = await response.json();
+    assert.match(payload.message, /at least 8/i);
+  });
+});
+
+test('login route rate-limits repeated attempts', async () => {
+  const priorMax = process.env.LOGIN_RATE_MAX;
+  const priorWindow = process.env.LOGIN_RATE_WINDOW_MS;
+  process.env.LOGIN_RATE_MAX = '3';
+  process.env.LOGIN_RATE_WINDOW_MS = '60000';
+  try {
+    await withServer(async ({ base }) => {
+      const statuses = [];
+      let retryAfter = null;
+      for (let i = 0; i < 4; i++) {
+        const response = await fetch(`${base}/api/account/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'missing@example.com', password: 'wrong-password' }),
+        });
+        statuses.push(response.status);
+        if (response.status === 429) retryAfter = response.headers.get('retry-after');
+      }
+      assert.deepEqual(statuses, [401, 401, 401, 429]);
+      assert.ok(retryAfter);
+    });
+  } finally {
+    if (priorMax === undefined) delete process.env.LOGIN_RATE_MAX;
+    else process.env.LOGIN_RATE_MAX = priorMax;
+    if (priorWindow === undefined) delete process.env.LOGIN_RATE_WINDOW_MS;
+    else process.env.LOGIN_RATE_WINDOW_MS = priorWindow;
   }
 });
 
