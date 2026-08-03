@@ -1,0 +1,29 @@
+http:
+  routers:
+    patwago-api:
+      rule: "(Host(`patwago.com`) || Host(`www.patwago.com`)) && PathPrefix(`/api`)"
+      entryPoints:
+        - http
+        - https
+      service: patwago-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+    patwago-web:
+      rule: "Host(`patwago.com`) || Host(`www.patwago.com`)"
+      entryPoints:
+        - http
+        - https
+      service: patwago-web
+      tls:
+        certResolver: letsencrypt
+      priority: 1
+  services:
+    patwago-api:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:4030"
+    patwago-web:
+      loadBalancer:
+        servers:
+          - url: "http://patwago-web:80"
