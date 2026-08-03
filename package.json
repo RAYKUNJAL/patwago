@@ -1,0 +1,16 @@
+{
+  "name": "patwago",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PatWaGo: Jamaican travel companion with vendors, trips, photos, guardian mode, and local backend.",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check server.js && node --check lib/store.js && node --check tests/api.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

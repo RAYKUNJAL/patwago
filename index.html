@@ -276,7 +276,56 @@ nav.scrolled{
 .vendor-loc{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted)}
 .vendor-loc svg{width:13px;height:13px;color:var(--text-dim)}
 .vendor-skel{height:160px;border-radius:var(--radius);background:rgba(255,255,255,0.03)}
+.vendor-photo{width:88px;height:64px;border-radius:14px;overflow:hidden;flex-shrink:0;border:1px solid rgba(255,255,255,0.12);background:#111}
+.vendor-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.vendor-summary{font-size:14px;color:var(--text-muted);margin:8px 0 12px;line-height:1.5}
+.vendor-top{align-items:stretch}
+.vendor-top .vendor-cat{align-self:flex-start;margin-top:4px}
+.app-shell{padding:100px 0;background:linear-gradient(180deg,rgba(255,215,0,0.03),transparent 14%,transparent)}
+.app-grid{display:grid;grid-template-columns:1.35fr .95fr;gap:24px;align-items:start;margin-top:28px}
+.app-panel{padding:24px}
+.featured-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.featured-head h3{font-size:24px;margin-top:4px}
+.place-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.place-card{border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;min-height:100%}
+.place-media{position:relative;aspect-ratio:16/10;overflow:hidden}
+.place-media img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease}
+.place-card:hover .place-media img{transform:scale(1.04)}
+.place-badge{position:absolute;left:12px;top:12px;background:rgba(10,10,10,0.78);color:var(--gold);border:1px solid rgba(255,215,0,0.25);padding:5px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;backdrop-filter:blur(10px)}
+.place-copy{padding:16px}
+.place-copy h3{font-size:19px;margin-bottom:4px}
+.place-meta{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--green-light)}
+.place-copy p{font-size:14px;color:var(--text-muted);margin:8px 0 12px;line-height:1.5}
+.place-tags{display:flex;flex-wrap:wrap;gap:8px}
+.place-tag{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:12px;color:var(--text-muted)}
+.trip-form{display:grid;gap:12px}
+.trip-actions{display:flex;gap:10px;flex-wrap:wrap}
+.trip-list{display:grid;gap:12px;margin-top:18px}
+.trip-item{padding:14px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)}
+.trip-item h4{font-size:16px;margin-bottom:4px}
+.trip-item p{font-size:13px;color:var(--text-muted);margin:0}
+.guardian-stack{display:grid;gap:12px}
+.guardian-card{padding:16px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)}
+.guardian-card strong{display:block;color:var(--text);margin-bottom:4px}
+.booking-bar{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 22px;margin-top:22px;position:sticky;bottom:14px;z-index:8}
+.booking-bar p{color:var(--text-muted);font-size:14px;margin-top:4px}
+.booking-actions{display:flex;gap:12px;flex-wrap:wrap}
+.bottom-nav{display:flex;justify-content:space-between;gap:8px;padding:12px 18px;margin-top:20px;position:sticky;bottom:0;z-index:7;background:rgba(10,10,10,0.88);backdrop-filter:blur(16px);border-top:1px solid var(--glass-border);border-radius:18px}
+.bottom-nav a{flex:1;text-align:center;padding:10px 8px;border-radius:12px;background:rgba(255,255,255,0.04);color:var(--text-muted);font-size:13px;font-weight:600}
+.bottom-nav a:hover{color:var(--gold);background:rgba(255,215,0,0.08)}
 .vendors-cta{text-align:center;margin-top:40px}
+@media(max-width:900px){
+  .signup-grid,.app-grid{grid-template-columns:1fr}
+  .place-grid{grid-template-columns:1fr}
+  .booking-bar{position:static}
+  .bottom-nav{position:static;flex-wrap:wrap}
+  .bottom-nav a{flex:1 1 45%}
+}
+@media(max-width:600px){
+  .bottom-nav a{flex:1 1 100%}
+  .app-panel{padding:20px}
+}
+
 /* ---------- VENDOR SIGNUP ---------- */
 .vendor-signup{padding:100px 0;background:linear-gradient(180deg,transparent,rgba(45,106,79,0.05),transparent)}
 .signup-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start;max-width:1080px;margin:0 auto}
@@ -563,14 +612,15 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
     <a href="#top" class="logo">Pat<span>WaGo</span></a>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#app">Explore</a>
       <a href="#how">How it works</a>
       <a href="#pricing">Pricing</a>
       <a href="#safety">Safety</a>
       <a href="#vendors">Vendors</a>
-      <a href="#vendor-signup">Become a Vendor</a>
+      <a href="#vendor-signup">For tour operators</a>
     </div>
     <div class="nav-cta">
-      <a href="#pricing" class="btn btn-ghost">Get the app</a>
+      <a href="#app" class="btn btn-ghost">Open app</a>
       <a href="#pricing" class="btn btn-gold">Start free trial</a>
     </div>
     <button class="hamburger" id="hamburger" aria-label="Menu">
@@ -580,13 +630,13 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
 </nav>
 <div class="mobile-menu" id="mobileMenu">
   <a href="#features">Features</a>
+  <a href="#app">Explore</a>
   <a href="#how">How it works</a>
   <a href="#pricing">Pricing</a>
   <a href="#safety">Safety</a>
   <a href="#vendors">Vendors</a>
   <a href="#vendor-signup">Become a Vendor</a>
-  <a href="#admin">Admin Center</a>
-  <a href="#pricing" class="btn btn-gold">Start free trial</a>
+  <a href="#app" class="btn btn-gold">Open app</a>
 </div>
 
 <!-- HERO -->
@@ -1018,10 +1068,10 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
     </div>
     <div class="foot-col">
       <h4>Partners</h4>
-      <a href="#vendor-signup">Become a Vendor</a>
+      <a href="#vendor-signup">For tour operators</a>
       <a href="#vendor-signup">For tour operators</a>
       <a href="mailto:hello@patwago.com">Contact</a>
-      <a href="#admin">Admin Center</a>
+      <a href="#app">Explore the app</a>
     </div>
   </div>
   <div class="foot-bottom">
@@ -1030,97 +1080,135 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
   </div>
 </footer>
 
-<!-- ADMIN CENTER -->
-<section class="admin-center" id="admin">
+<!-- APP EXPERIENCE -->
+<section class="app-shell" id="app">
   <div class="wrap">
-    <!-- Login gate (shown until authed) -->
-    <div class="admin-login glass" id="adminLogin">
-      <h3>Admin Center</h3>
-      <p>Restricted area. Sign in to manage vendors, passes and platform stats.</p>
-      <form id="adminLoginForm" novalidate>
-        <div class="field">
-          <label for="adminUser">Username</label>
-          <input type="text" id="adminUser" name="username" autocomplete="username" placeholder="admin" required />
-        </div>
-        <div class="field">
-          <label for="adminPass">Password</label>
-          <input type="password" id="adminPass" name="password" autocomplete="current-password" placeholder="••••••••" required />
-        </div>
-        <button type="submit" class="btn btn-gold" style="width:100%;justify-content:center">Sign in</button>
-        <div class="form-msg" id="adminLoginMsg"></div>
-      </form>
-      <p class="muted" style="font-size:12px;margin-top:18px">Demo: username <strong>admin</strong> · password <strong>patwago</strong></p>
+    <div class="section-head fade">
+      <span class="eyebrow">Inside the app</span>
+      <h2>More than a landing page</h2>
+      <p>Actual photographs, trip planning, and Guardian Mode are backed by the API.</p>
     </div>
 
-    <!-- Admin dashboard (shown after auth) -->
-    <div class="admin-content" id="adminContent">
-      <div class="admin-head">
-        <div>
-          <span class="eyebrow">PatWaGo Admin</span>
-          <h2 style="font-size:clamp(28px,4vw,40px)">Admin Center</h2>
+    <div class="app-grid">
+      <div class="glass app-panel fade">
+        <div class="featured-head">
+          <div>
+            <span class="eyebrow">Explore Jamaica</span>
+            <h3>Featured locations</h3>
+          </div>
+          <a href="#map" class="btn btn-ghost" style="padding:10px 18px;font-size:14px">Open map</a>
         </div>
-        <button class="btn btn-ghost admin-logout" id="adminLogout">Sign out</button>
-      </div>
-      <div class="admin-tabs" id="adminTabs">
-        <button class="admin-tab active" data-tab="overview">Overview</button>
-        <button class="admin-tab" data-tab="vendors">Vendors</button>
-        <button class="admin-tab" data-tab="signups">Vendor Signups</button>
-        <button class="admin-tab" data-tab="passes">Passes &amp; Payments</button>
-      </div>
-
-      <!-- Overview -->
-      <div class="admin-panel active" data-panel="overview">
-        <div class="stat-grid" id="statGrid">
-          <div class="stat-card glass"><div class="stat-label">Vendors</div><div class="stat-value" id="statVendors">—</div><div class="stat-foot">total listed</div></div>
-          <div class="stat-card glass"><div class="stat-label">Signups</div><div class="stat-value" id="statSignups">—</div><div class="stat-foot">pending applications</div></div>
-          <div class="stat-card glass"><div class="stat-label">Passes sold</div><div class="stat-value" id="statPasses">—</div><div class="stat-foot">day + trip passes</div></div>
-          <div class="stat-card glass"><div class="stat-label">Revenue (30d)</div><div class="stat-value" id="statRevenue">—</div><div class="stat-foot">USD gross</div></div>
-        </div>
-        <div class="glass" style="padding:24px">
-          <h3 style="font-size:18px;margin-bottom:12px">Recent activity</h3>
-          <div id="activityFeed"><p class="muted">Loading…</p></div>
+        <div id="placesGrid" class="place-grid">
+          <div class="vendor-skel"></div>
+          <div class="vendor-skel"></div>
+          <div class="vendor-skel"></div>
+          <div class="vendor-skel"></div>
         </div>
       </div>
 
-      <!-- Vendors -->
-      <div class="admin-panel" data-panel="vendors">
-        <div class="glass" style="padding:24px">
-          <h3 style="font-size:18px;margin-bottom:14px">Vendor directory</h3>
-          <div class="admin-table-wrap">
-            <table class="admin-table">
-              <thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Rating</th><th>Status</th></tr></thead>
-              <tbody id="adminVendorRows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
-            </table>
+      <div class="glass app-panel fade" id="trips">
+        <div class="featured-head">
+          <div>
+            <span class="eyebrow">Trip planner</span>
+            <h3>Build your itinerary</h3>
+          </div>
+          <a href="#pricing" class="btn btn-gold" style="padding:10px 18px;font-size:14px">Get a pass</a>
+        </div>
+        <form id="tripForm" class="trip-form">
+          <div class="field">
+            <label for="tripTitle">Trip title</label>
+            <input type="text" id="tripTitle" name="title" placeholder="Jamaica Weekender" required />
+          </div>
+          <div class="field">
+            <label for="tripDestination">Destination</label>
+            <input type="text" id="tripDestination" name="destination" placeholder="Kingston, Negril, Ocho Rios…" required />
+          </div>
+          <div class="trip-actions">
+            <div class="field" style="flex:1;min-width:140px">
+              <label for="tripStartDate">Start date</label>
+              <input type="date" id="tripStartDate" name="startDate" />
+            </div>
+            <div class="field" style="flex:1;min-width:120px">
+              <label for="tripDays">Days</label>
+              <input type="number" id="tripDays" name="days" min="1" max="30" value="3" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="tripNotes">Notes</label>
+            <textarea id="tripNotes" name="notes" placeholder="Airport pickup, beaches, food stops, and museum day."></textarea>
+          </div>
+          <div class="trip-actions">
+            <button type="submit" class="btn btn-gold">Save trip</button>
+            <a href="#vendor-signup" class="btn btn-ghost">Add vendors</a>
+          </div>
+        </form>
+        <div id="tripList" class="trip-list"></div>
+      </div>
+    </div>
+
+    <div class="app-grid" style="margin-top:24px">
+      <div class="glass app-panel fade" id="guardian">
+        <div class="featured-head">
+          <div>
+            <span class="eyebrow">Guardian Mode</span>
+            <h3>Travel safety check-ins</h3>
+          </div>
+          <a href="tel:119" class="btn btn-ghost" style="padding:10px 18px;font-size:14px">Call 119</a>
+        </div>
+        <p class="muted" style="margin-bottom:16px">Check-ins and location sharing only with Guardians you choose. Emergency calls open your phone's native dialer.</p>
+        <form id="guardianForm" class="trip-form">
+          <div class="field">
+            <label for="guardianName">Traveler name</label>
+            <input type="text" id="guardianName" name="traveler_name" placeholder="Ray" required />
+          </div>
+          <div class="field">
+            <label for="guardianContact">Trusted contact</label>
+            <input type="text" id="guardianContact" name="contact" placeholder="Maya + Mom" required />
+          </div>
+          <div class="trip-actions">
+            <div class="field" style="flex:1;min-width:140px">
+              <label for="guardianHours">Check-in every (hours)</label>
+              <input type="number" id="guardianHours" name="hours" min="1" max="24" value="4" />
+            </div>
+            <div class="field" style="flex:2;min-width:200px">
+              <label for="guardianNote">Note</label>
+              <input type="text" id="guardianNote" name="note" placeholder="Beach day in Negril" />
+            </div>
+          </div>
+          <div class="trip-actions">
+            <button type="submit" class="btn btn-gold">Schedule check-in</button>
+            <button type="button" class="btn btn-ghost" id="safeBtn">I'm Safe</button>
+            <a href="tel:110" class="btn btn-ghost">Call 110</a>
+          </div>
+        </form>
+        <div id="guardianList" class="guardian-stack"></div>
+      </div>
+
+      <div class="glass app-panel fade">
+        <div class="featured-head">
+          <div>
+            <span class="eyebrow">Fast actions</span>
+            <h3>Booking bar &amp; navigation</h3>
           </div>
         </div>
-      </div>
-
-      <!-- Signups -->
-      <div class="admin-panel" data-panel="signups">
-        <div class="glass" style="padding:24px">
-          <h3 style="font-size:18px;margin-bottom:14px">Vendor signup applications</h3>
-          <div class="admin-table-wrap">
-            <table class="admin-table">
-              <thead><tr><th>Business</th><th>Category</th><th>Plan</th><th>Email</th><th>Status</th></tr></thead>
-              <tbody id="adminSignupRows"><tr><td colspan="5" class="muted">No applications yet.</td></tr></tbody>
-            </table>
+        <div class="booking-bar glass">
+          <div>
+            <strong style="font-size:18px;color:var(--text)">Need the full travel flow?</strong>
+            <p>Book vendors, save a trip, and keep Guardians updated without leaving the app shell.</p>
           </div>
-          <p class="muted" style="font-size:13px;margin-top:14px">Applications submitted via the vendor signup form appear here. Locally stored in this demo.</p>
-        </div>
-      </div>
-
-      <!-- Passes -->
-      <div class="admin-panel" data-panel="passes">
-        <div class="glass" style="padding:24px">
-          <h3 style="font-size:18px;margin-bottom:14px">Pass sales &amp; PayPal transactions</h3>
-          <div class="admin-table-wrap">
-            <table class="admin-table">
-              <thead><tr><th>Pass</th><th>Amount</th><th>Buyer</th><th>Status</th><th>Date</th></tr></thead>
-              <tbody id="adminPassRows"><tr><td colspan="5" class="muted">No sales recorded yet.</td></tr></tbody>
-            </table>
+          <div class="booking-actions">
+            <a href="#vendors" class="btn btn-ghost">Browse vendors</a>
+            <a href="#pricing" class="btn btn-gold">Get a pass</a>
           </div>
-          <p class="muted" style="font-size:13px;margin-top:14px">PayPal checkouts completed on the pricing section are recorded here. Locally stored in this demo.</p>
         </div>
+        <div class="bottom-nav" aria-label="App navigation">
+          <a href="#top">Home</a>
+          <a href="#app">Explore</a>
+          <a href="#trips">Trip</a>
+          <a href="#guardian">Safe</a>
+          <a href="#vendors">Vendors</a>
+        </div>
+        <p class="muted" style="margin-top:16px">The bottom bar now stays usable on mobile and no longer overlaps the booking area.</p>
       </div>
     </div>
   </div>
@@ -1178,10 +1266,12 @@ function loadVendorShowcase(){
         var reviews=parseInt(v.review_count,10)||0;
         var cat=CAT_LABELS[v.category]||escape(v.category||'');
         var verified = v.verified ? '<span class="vendor-verified"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Verified</span>' : '';
+        var hero = v.photo_url ? '<div class="vendor-photo"><img src="'+escape(v.photo_url)+'" alt="'+escape(v.name)+' photo" loading="lazy"></div>' : '<div class="vendor-avatar">'+escape(initials(v.name))+'</div>';
         return '<div class="vendor-card glass fade in">'
-          + '<div class="vendor-top"><div class="vendor-avatar">'+escape(initials(v.name))+'</div><span class="vendor-cat">'+escape(cat)+'</span></div>'
+          + '<div class="vendor-top">'+hero+'<span class="vendor-cat">'+escape(cat)+'</span></div>'
           + '<h3>'+escape(v.name)+'</h3>'
           + verified
+          + (v.summary ? '<p class="vendor-summary">'+escape(v.summary)+'</p>' : '')
           + '<div class="vendor-rating"><span class="stars">'+stars(rating)+'</span><span class="num">'+rating.toFixed(1)+(reviews?(' · '+reviews+' reviews'):'')+'</span></div>'
           + '<div class="vendor-loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'+escape(v.location_address||'Jamaica')+'</div>'
           + '</div>';
@@ -1412,7 +1502,7 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
 function setupPayPalButtons(){
   var wraps=document.querySelectorAll('.paypal-wrap[data-plan]');
   if(!wraps.length)return;
-  var apiBase='https://patwago.com/api';
+  var apiBase='/api';
 
   function recordSaleLocal(plan,amount){
     try{
@@ -1478,7 +1568,7 @@ else{setupPayPalButtons()}
   var form=document.getElementById('vendorForm');
   var msg=document.getElementById('vendorMsg');
   if(!form)return;
-  var apiBase='https://patwago.com/api';
+  var apiBase='/api';
 
   function showMsg(type,text){msg.className='form-msg '+type;msg.textContent=text}
 
@@ -1527,142 +1617,167 @@ else{setupPayPalButtons()}
   });
 })();
 
-/* ---------- Admin center: hash routing, login, tabs, data ---------- */
+/* ---------- App shell interactions ---------- */
 (function(){
-  var section=document.getElementById('admin');
-  if(!section)return;
-  var loginEl=document.getElementById('adminLogin');
-  var contentEl=document.getElementById('adminContent');
-  var loginForm=document.getElementById('adminLoginForm');
-  var loginMsg=document.getElementById('adminLoginMsg');
-  var logoutBtn=document.getElementById('adminLogout');
-  var tabs=document.getElementById('adminTabs');
-  var apiBase='https://patwago.com/api';
+  var placesGrid=document.getElementById('placesGrid');
+  var tripForm=document.getElementById('tripForm');
+  var tripList=document.getElementById('tripList');
+  var guardianForm=document.getElementById('guardianForm');
+  var guardianList=document.getElementById('guardianList');
+  var safeBtn=document.getElementById('safeBtn');
+  if(!placesGrid&&!tripForm&&!guardianForm)return;
 
-  var ADMIN_USER='admin',ADMIN_PASS='patwago';
-  var SESSION_KEY='patwago_admin_session';
+  var apiBase='/api';
+  var activeTripId='';
 
-  function isAuthed(){try{return sessionStorage.getItem(SESSION_KEY)==='1'}catch(e){return false}}
-  function setAuthed(v){try{v?sessionStorage.setItem(SESSION_KEY,'1'):sessionStorage.removeItem(SESSION_KEY)}catch(e){}}
-
-  function showAdmin(){
-    section.classList.add('visible');
-    if(isAuthed()){loginEl.style.display='none';contentEl.classList.add('show')}
-    else{loginEl.style.display='block';contentEl.classList.remove('show')}
-  }
-  function hideAdmin(){section.classList.remove('visible');loginEl.style.display='none';contentEl.classList.remove('show')}
-
-  function route(){
-    if(location.hash==='#admin'){showAdmin()}
-    else if(location.hash.indexOf('#admin')===0){showAdmin()}
-    else{hideAdmin()}
-  }
-  window.addEventListener('hashchange',route);
-  route();
-
-  // login
-  loginForm.addEventListener('submit',function(e){
-    e.preventDefault();
-    var u=document.getElementById('adminUser').value.trim();
-    var p=document.getElementById('adminPass').value;
-    if(u===ADMIN_USER&&p===ADMIN_PASS){
-      setAuthed(true);loginMsg.className='form-msg';loginMsg.textContent='';
-      loginEl.style.display='none';contentEl.classList.add('show');
-      loadData();
-    }else{
-      loginMsg.className='form-msg err';loginMsg.textContent='Invalid username or password.';
-    }
-  });
-  logoutBtn.addEventListener('click',function(){setAuthed(false);loginEl.style.display='block';contentEl.classList.remove('show');loginForm.reset()});
-
-  // tabs
-  tabs.addEventListener('click',function(e){
-    var t=e.target.closest('.admin-tab');if(!t)return;
-    var name=t.getAttribute('data-tab');
-    Array.prototype.forEach.call(tabs.querySelectorAll('.admin-tab'),function(x){x.classList.toggle('active',x===t)});
-    Array.prototype.forEach.call(section.querySelectorAll('.admin-panel'),function(p){p.classList.toggle('active',p.getAttribute('data-panel')===name)});
-  });
-
-  // ---- data loading ----
-  function loadData(){
-    loadStats();loadVendors();loadSignups();loadPasses();loadActivity();
+  function renderPlace(place){
+    var badge=place.type ? place.type.replace(/_/g,' ') : 'Location';
+    var tags=(place.highlights||[]).map(function(t){return '<span class="place-tag">'+esc(t)+'</span>'}).join('');
+    return '<article class="place-card glass fade in">'
+      + '<div class="place-media">'
+      + '<img src="'+esc(place.photo_url)+'" alt="'+esc(place.name)+'" loading="lazy" />'
+      + '<span class="place-badge">'+esc(badge)+'</span>'
+      + '</div>'
+      + '<div class="place-copy">'
+      + '<div class="place-meta">'+esc(place.region||'Jamaica')+'</div>'
+      + '<h3>'+esc(place.name)+'</h3>'
+      + '<p>'+esc(place.summary||'')+'</p>'
+      + '<div class="place-tags">'+tags+'</div>'
+      + '<div class="trip-actions" style="margin-top:14px">'
+      + '<button type="button" class="btn btn-ghost" data-add-place="'+esc(place.id)+'" data-place-title="'+esc(place.name)+'">Add to trip</button>'
+      + '<a href="'+esc(place.source_url||'#')+'" target="_blank" rel="noreferrer" class="btn btn-ghost">Photo source</a>'
+      + '</div>'
+      + '</div>'
+      + '</article>';
   }
 
-  function loadStats(){
-    var elV=document.getElementById('statVendors'),elS=document.getElementById('statSignups'),
-        elP=document.getElementById('statPasses'),elR=document.getElementById('statRevenue');
-    // vendors count + passes from API where possible
-    fetch(apiBase+'/vendors?limit=100',{headers:{'Accept':'application/json'}})
-      .then(function(r){return r.ok?r.json():Promise.reject(r.status)})
+  function renderTrip(trip){
+    var items=(trip.items||[]).map(function(item){
+      return '<li>'+esc(item.title)+(item.note ? ' — '+esc(item.note) : '')+'</li>';
+    }).join('');
+    return '<article class="trip-item">'
+      + '<h4>'+esc(trip.title)+'</h4>'
+      + '<p>'+esc(trip.destination||'Jamaica')+' · '+esc(String(trip.days||1))+' days'+(trip.startDate ? ' · '+esc(trip.startDate) : '')+'</p>'
+      + (trip.notes ? '<p style="margin-top:6px">'+esc(trip.notes)+'</p>' : '')
+      + (items ? '<ul style="margin:10px 0 0 18px;color:var(--text-muted)">'+items+'</ul>' : '<p style="margin-top:8px">No stops yet.</p>')
+      + '</article>';
+  }
+
+  function renderCheckin(checkin){
+    return '<article class="guardian-card">'
+      + '<strong>'+esc(checkin.traveler_name)+'</strong>'
+      + '<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--green-light);margin-bottom:8px">'+esc(checkin.state||'scheduled')+'</div>'
+      + '<p style="margin:0">Contact: '+esc(checkin.contact||'—')+' · Every '+esc(String(checkin.hours||1))+' hours</p>'
+      + (checkin.note ? '<p style="margin-top:6px">'+esc(checkin.note)+'</p>' : '')
+      + '</article>';
+  }
+
+  function loadPlaces(){
+    if(!placesGrid)return;
+    fetch(apiBase+'/places?limit=4',{headers:{'Accept':'application/json'}})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
       .then(function(res){
-        var n=(res&&res.data&&res.data.length)||0;
-        elV.textContent=n;
-      }).catch(function(){elV.textContent='—'});
-
-    var signups=JSON.parse(localStorage.getItem('patwago_signups')||'[]');
-    elS.textContent=signups.length;
-
-    var sales=JSON.parse(localStorage.getItem('patwago_pass_sales')||'[]');
-    elP.textContent=sales.length;
-    var rev=sales.reduce(function(a,b){return a+Number(b.amount||0)},0);
-    elR.textContent=fmtMoney(rev);
-  }
-
-  function statusPill(status){
-    var cls='pending';if(status==='active'||status==='completed'){cls='active'}else if(status==='suspended'){cls='suspended'}
-    return '<span class="admin-pill '+cls+'">'+esc(status||'pending')+'</span>';
-  }
-
-  function loadVendors(){
-    var rows=document.getElementById('adminVendorRows');
-    fetch(apiBase+'/vendors?limit=100',{headers:{'Accept':'application/json'}})
-      .then(function(r){return r.ok?r.json():Promise.reject(r.status)})
-      .then(function(res){
-        var vs=(res&&res.data)||[];
-        if(!vs.length){rows.innerHTML='<tr><td colspan="5" class="muted">No vendors found.</td></tr>';return}
-        rows.innerHTML=vs.map(function(v){
-          return '<tr><td>'+esc(v.name)+'</td><td>'+esc(catLabel(v.category))+'</td><td>'+esc(v.location_address||'—')+'</td><td>'+(v.avg_rating?(Number(v.avg_rating).toFixed(1)+'★'):'—')+'</td><td>'+statusPill(v.verified?'active':'pending')+'</td></tr>';
-        }).join('');
-      }).catch(function(){
-        rows.innerHTML='<tr><td colspan="5" class="muted">Couldn\u2019t load vendors (API unreachable).</td></tr>';
+        var places=(res&&res.data)||[];
+        placesGrid.innerHTML=places.length ? places.map(renderPlace).join('') : '<p class="muted" style="grid-column:1/-1;text-align:center">No places yet.</p>';
+      })
+      .catch(function(err){
+        console.warn('[PatWaGo] places fetch failed:',err);
+        placesGrid.innerHTML='<p class="muted" style="grid-column:1/-1;text-align:center">Couldn\'t load places right now.</p>';
       });
   }
 
-  function loadSignups(){
-    var rows=document.getElementById('adminSignupRows');
-    var list=JSON.parse(localStorage.getItem('patwago_signups')||'[]');
-    if(!list.length){rows.innerHTML='<tr><td colspan="5" class="muted">No applications yet.</td></tr>';return}
-    list.reverse();
-    rows.innerHTML=list.map(function(s){
-      return '<tr><td>'+esc(s.name)+'</td><td>'+esc(catLabel(s.category))+'</td><td>'+esc(s.plan)+'</td><td>'+esc(s.email)+'</td><td>'+statusPill(s.status)+'</td></tr>';
-    }).join('');
+  function loadTrips(){
+    if(!tripList)return;
+    fetch(apiBase+'/trips',{headers:{'Accept':'application/json'}})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+      .then(function(res){
+        var trips=(res&&res.data)||[];
+        activeTripId=trips[0] ? trips[0].id : '';
+        tripList.innerHTML=trips.length ? trips.map(renderTrip).join('') : '<p class="muted">No trips saved yet. Create one above.</p>';
+      })
+      .catch(function(err){
+        console.warn('[PatWaGo] trip fetch failed:',err);
+        tripList.innerHTML='<p class="muted">Couldn\'t load trips right now.</p>';
+      });
   }
 
-  function loadPasses(){
-    var rows=document.getElementById('adminPassRows');
-    var list=JSON.parse(localStorage.getItem('patwago_pass_sales')||'[]');
-    if(!list.length){rows.innerHTML='<tr><td colspan="5" class="muted">No sales recorded yet.</td></tr>';return}
-    list.reverse();
-    rows.innerHTML=list.map(function(s){
-      return '<tr><td>'+esc(s.plan)+'</td><td>'+fmtMoney(s.amount)+'</td><td>'+esc(s.buyer||'—')+'</td><td>'+statusPill(s.status)+'</td><td>'+new Date(s.date).toLocaleDateString()+'</td></tr>';
-    }).join('');
+  function loadCheckins(){
+    if(!guardianList)return;
+    fetch(apiBase+'/guardian/checkins',{headers:{'Accept':'application/json'}})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+      .then(function(res){
+        var list=(res&&res.data)||[];
+        guardianList.innerHTML=list.length ? list.map(renderCheckin).join('') : '<p class="muted">No check-ins yet.</p>';
+      })
+      .catch(function(err){
+        console.warn('[PatWaGo] guardian fetch failed:',err);
+        guardianList.innerHTML='<p class="muted">Couldn\'t load check-ins right now.</p>';
+      });
   }
 
-  function loadActivity(){
-    var feed=document.getElementById('activityFeed');
-    var items=[];
-    JSON.parse(localStorage.getItem('patwago_signups')||'[]').slice(-5).reverse().forEach(function(s){
-      items.push('<p style="margin:6px 0">📝 New vendor signup: <strong>'+esc(s.name)+'</strong> ('+esc(catLabel(s.category))+')</p>');
+  async function saveTripItem(placeId, placeTitle){
+    try{
+      if(!activeTripId){
+        var created=await fetch(apiBase+'/trips',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({title:'My Jamaica Trip',destination:'Jamaica',days:3,notes:'Created from featured places.'})}).then(function(r){return r.json()});
+        if(created && created.data && created.data.id) activeTripId=created.data.id;
+      }
+      if(!activeTripId) throw new Error('No trip available');
+      await fetch(apiBase+'/trips/'+encodeURIComponent(activeTripId)+'/items',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({title:placeTitle,note:'Saved from featured locations',place_id:placeId})});
+      await loadTrips();
+    }catch(err){
+      console.warn('[PatWaGo] add place failed:',err);
+    }
+  }
+
+  if(placesGrid){
+    placesGrid.addEventListener('click',function(e){
+      var btn=e.target.closest('[data-add-place]');
+      if(!btn)return;
+      saveTripItem(btn.getAttribute('data-add-place'), btn.getAttribute('data-place-title')||'Location');
     });
-    JSON.parse(localStorage.getItem('patwago_pass_sales')||'[]').slice(-5).reverse().forEach(function(s){
-      items.push('<p style="margin:6px 0">💳 Pass sold: <strong>'+esc(s.plan)+'</strong> — '+fmtMoney(s.amount)+'</p>');
-    });
-    feed.innerHTML=items.length?items.join(''):'<p class="muted">No recent activity.</p>';
   }
 
-  // auto-load when authed already
-  if(isAuthed()&&location.hash.indexOf('#admin')===0){loadData()}
+  if(tripForm){
+    tripForm.addEventListener('submit',function(e){
+      e.preventDefault();
+      var data={};
+      Array.prototype.forEach.call(tripForm.elements,function(el){if(el.name){data[el.name]=el.value}});
+      fetch(apiBase+'/trips',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(data)})
+        .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+        .then(function(){tripForm.reset();tripForm.querySelector('[name="days"]').value='3';loadTrips();})
+        .catch(function(err){console.warn('[PatWaGo] trip save failed:',err)});
+    });
+  }
+
+  if(guardianForm){
+    guardianForm.addEventListener('submit',function(e){
+      e.preventDefault();
+      var data={};
+      Array.prototype.forEach.call(guardianForm.elements,function(el){if(el.name){data[el.name]=el.value}});
+      data.state='scheduled';
+      fetch(apiBase+'/guardian/checkins',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(data)})
+        .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+        .then(function(){loadCheckins();})
+        .catch(function(err){console.warn('[PatWaGo] guardian save failed:',err)});
+    });
+  }
+
+  if(safeBtn){
+    safeBtn.addEventListener('click',function(){
+      var name=(document.getElementById('guardianName')&&document.getElementById('guardianName').value)||'Traveler';
+      var contact=(document.getElementById('guardianContact')&&document.getElementById('guardianContact').value)||'Trusted contact';
+      fetch(apiBase+'/guardian/checkins',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({traveler_name:name,contact:contact,hours:1,note:"I'm safe right now.",state:'safe'})})
+        .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+        .then(function(){loadCheckins();})
+        .catch(function(err){console.warn('[PatWaGo] safe check-in failed:',err)});
+    });
+  }
+
+  loadPlaces();
+  loadTrips();
+  loadCheckins();
 })();
+
 
 /* ---------- Vendor map (Leaflet + OpenStreetMap, no API key) ---------- */
 (function(){
