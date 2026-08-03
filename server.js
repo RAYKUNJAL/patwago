@@ -13,6 +13,7 @@ const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
 const customerData = require('./lib/customer-data');
 const payments = require('./lib/payments');
 const { createRateLimiter } = require('./lib/rate-limit');
+const googleMaps = require('./lib/google-maps');
 
 const ROOT = store.ROOT;
 const PORT = Number(process.env.PORT || 3000);
@@ -301,6 +302,7 @@ async function handleApi(req, res, url) {
       stats: store.dashboardStats(),
       capabilities: {
         grok: Boolean(process.env.XAI_API_KEY),
+        google_maps: googleMaps.configured(),
         self_hosted_stt: Boolean(process.env.WHISPER_URL),
         self_hosted_tts: Boolean(process.env.TTS_BASE_URL),
       },
@@ -442,6 +444,49 @@ async function handleApi(req, res, url) {
       ok: true,
       data: store.listPlaces({ limit: searchParams.get('limit') || undefined }),
     });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/maps/config') {
+    return sendJson(res, 200, { ok: true, data: googleMaps.publicConfig() });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/maps/businesses') {
+    const data = await googleMaps.businessSearch({
+      query: searchParams.get('q') || searchParams.get('query') || 'restaurants in Jamaica',
+      region: searchParams.get('region') || 'Jamaica',
+      type: searchParams.get('type') || searchParams.get('category') || '',
+      limit: searchParams.get('limit') || 10,
+    });
+    return sendJson(res, 200, { ok: true, data });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/maps/nearby') {
+    const data = await googleMaps.nearbySearch({
+      lat: searchParams.get('lat'),
+      lng: searchParams.get('lng'),
+      radius: searchParams.get('radius') || 5000,
+      keyword: searchParams.get('keyword') || searchParams.get('q') || '',
+      type: searchParams.get('type') || 'restaurant',
+      limit: searchParams.get('limit') || 10,
+    });
+    return sendJson(res, 200, { ok: true, data });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/maps/directions') {
+    const data = await googleMaps.directions({
+      origin: searchParams.get('origin') || '',
+      destination: searchParams.get('destination') || '',
+      mode: searchParams.get('mode') || 'driving',
+    });
+    return sendJson(res, 200, { ok: true, data });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/maps/photo') {
+    const ref = String(searchParams.get('ref') || '').trim();
+    if (!ref) return sendJson(res, 400, { ok: false, message: 'photo reference is required' });
+    res.writeHead(302, { Location: googleMaps.photoRedirectUrl(ref, searchParams.get('maxwidth') || 640) });
+    res.end();
+    return true;
   }
 
   if (req.method === 'GET' && pathname === '/api/photos') {

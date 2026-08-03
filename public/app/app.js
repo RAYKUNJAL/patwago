@@ -88,6 +88,59 @@
     loadVendors();
   }
 
+  var googleBusinessForm = document.getElementById('googleBusinessForm');
+  var googleBusinessQuery = document.getElementById('googleBusinessQuery');
+  var googleBusinessResults = document.getElementById('googleBusinessResults');
+  if (googleBusinessForm && googleBusinessQuery && googleBusinessResults) {
+    googleBusinessForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var q = googleBusinessQuery.value.trim();
+      if (!q) return toast('Enter a business, food, shop, or attraction to search.', true);
+      googleBusinessResults.innerHTML = '<div class="vendor-skel"></div><div class="vendor-skel"></div><div class="vendor-skel"></div>';
+      jsonFetch('/api/maps/businesses?q=' + encodeURIComponent(q) + '&region=Jamaica&limit=9')
+        .then(function (payload) {
+          if (!payload.data.length) {
+            googleBusinessResults.innerHTML = '<div class="empty-results"><h3>No Google listing found</h3><p>Try a different area or business type.</p></div>';
+            return;
+          }
+          googleBusinessResults.innerHTML = payload.data.map(function (p) {
+            var status = p.open_now === null ? 'Hours not listed' : (p.open_now ? 'Open now' : 'May be closed');
+            var photo = p.photo_url ? '<img src="' + escHtml(p.photo_url) + '" alt="' + escHtml(p.name) + '" loading="lazy">' : '';
+            return '<article class="vendor-card glass">' + photo + '<div class="vendor-card-body"><div class="vendor-card-meta"><span class="eyebrow">Google Maps</span><strong>' + status + '</strong></div><h3>' + escHtml(p.name) + '</h3><p class="vendor-summary">' + escHtml(p.address) + '</p><div class="vendor-rating"><span class="stars">★★★★★</span><span>' + (p.rating || '—') + ' · ' + Number(p.user_ratings_total || 0) + ' Google reviews</span></div><div class="vendor-actions"><a class="btn btn-gold" href="' + escHtml(p.maps_url || '#') + '" target="_blank" rel="noopener">Open listing</a><a class="btn btn-ghost" href="/app/vendors?q=' + encodeURIComponent(p.name) + '">Find PatWaGo vendors</a></div></div></article>';
+          }).join('');
+        })
+        .catch(function (error) { googleBusinessResults.innerHTML = '<p class="muted">' + escHtml(error.message) + '</p>'; });
+    });
+  }
+
+  var directionsForm = document.getElementById('directionsForm');
+  var directionsOrigin = document.getElementById('directionsOrigin');
+  var directionsMode = document.getElementById('directionsMode');
+  var directionsResult = document.getElementById('directionsResult');
+  if (directionsForm && directionsOrigin && directionsResult) {
+    directionsForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var origin = directionsOrigin.value.trim();
+      var destination = directionsForm.getAttribute('data-destination') || '';
+      var mode = directionsMode ? directionsMode.value : 'driving';
+      if (!origin) return toast('Enter your starting point.', true);
+      directionsResult.innerHTML = '<p class="muted">Getting Google directions…</p>';
+      jsonFetch('/api/maps/directions?origin=' + encodeURIComponent(origin) + '&destination=' + encodeURIComponent(destination) + '&mode=' + encodeURIComponent(mode))
+        .then(function (payload) {
+          if (!payload.data) {
+            directionsResult.innerHTML = '<p class="muted">No route found. Try a more specific hotel, airport, or town.</p>';
+            return;
+          }
+          var d = payload.data;
+          var steps = (d.steps || []).slice(0, 8).map(function (step, index) {
+            return '<li><strong>' + (index + 1) + '. ' + escHtml(step.instruction) + '</strong><span>' + escHtml(step.distance || '') + ' · ' + escHtml(step.duration || '') + '</span></li>';
+          }).join('');
+          directionsResult.innerHTML = '<div class="directions-summary"><h3>' + escHtml(d.distance || 'Route') + ' · ' + escHtml(d.duration || '') + '</h3><p class="muted">From ' + escHtml(d.origin) + ' to ' + escHtml(d.destination) + '</p><a class="btn btn-gold" href="' + escHtml(d.maps_url) + '" target="_blank" rel="noopener">Open full route in Google Maps</a></div><ol class="trip-items">' + steps + '</ol>';
+        })
+        .catch(function (error) { directionsResult.innerHTML = '<p class="muted">' + escHtml(error.message) + '</p>'; });
+    });
+  }
+
   function submitJson(form, url, successMessage) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();

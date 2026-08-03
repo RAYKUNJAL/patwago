@@ -24,6 +24,7 @@ function loadFreshServer(dataDir) {
   delete require.cache[require.resolve('../lib/analytics')];
   delete require.cache[require.resolve('../lib/payments')];
   delete require.cache[require.resolve('../lib/rate-limit')];
+  delete require.cache[require.resolve('../lib/google-maps')];
   delete require.cache[require.resolve('../lib/ai-agent')];
   delete require.cache[require.resolve('../lib/app-pages')];
   delete require.cache[require.resolve('../server')];
