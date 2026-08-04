@@ -244,6 +244,79 @@ function renderCheckoutPage(order) {
 </html>`;
 }
 
+function renderCheckoutCompletePage(token) {
+  const orderId = String(token || '').trim();
+  const safeId = escapeHtml(orderId);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Checkout complete — PatWaGo</title>
+  <style>
+    :root{color-scheme:dark;background:#0A0A0A;color:#F8F9FA;font-family:Inter,system-ui,sans-serif}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at top,#1b1b1b,#0A0A0A 60%);padding:24px}
+    .card{max-width:560px;width:100%;background:rgba(20,20,20,.9);border:1px solid rgba(255,215,0,.24);border-radius:24px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+    h1{font-family:Anton,Inter,sans-serif;font-size:42px;line-height:1;margin:0 0 10px;color:#FFD700}
+    p{line-height:1.6;color:#ADB5BD}
+    .status{display:inline-block;margin-bottom:14px;padding:6px 12px;border-radius:999px;background:rgba(255,215,0,.12);color:#FFD700;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+    .btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:999px;padding:14px 22px;font-weight:700;font-size:15px;cursor:pointer;text-decoration:none}
+    .btn-gold{background:#FFD700;color:#0A0A0A}
+    .btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12)}
+    .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+    #msg{margin-top:14px;min-height:1.4em}
+    .ok{color:#8ee6b0}.err{color:#ff9090}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="status">PayPal return</div>
+    <h1>Activating your pass</h1>
+    <p>We're confirming your PayPal payment and unlocking PatWaGo. Keep this page open for a moment.</p>
+    <p id="msg">Confirming order${orderId ? ` <strong>${safeId}</strong>` : ''}…</p>
+    <div class="actions">
+      <a class="btn btn-gold" href="/account/login?next=/app">Sign in / create account</a>
+      <a class="btn btn-ghost" href="/#pricing">Back to pricing</a>
+    </div>
+  </main>
+  <script>
+  (function(){
+    var orderId=${JSON.stringify(orderId)};
+    var msg=document.getElementById('msg');
+    if(!orderId){
+      msg.className='err';
+      msg.textContent='Missing PayPal order token. Return to pricing and try again.';
+      return;
+    }
+    fetch('/api/paypal/orders/'+encodeURIComponent(orderId)+'/capture',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'include',
+      body:'{}'
+    }).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j}})}).then(function(res){
+      if(!res.ok || !res.j || res.j.ok===false){
+        throw new Error((res.j&&res.j.message)||'Capture failed');
+      }
+      var data=res.j.data||{};
+      if(data.pass){
+        msg.className='ok';
+        msg.textContent='Payment complete. Your pass is active — opening the app…';
+        setTimeout(function(){ window.location.href='/app'; }, 900);
+        return;
+      }
+      msg.className='ok';
+      msg.textContent='Payment received. Sign in or create your account to attach this pass, then open the app.';
+      try{ localStorage.setItem('patwago_pending_order', orderId); }catch(e){}
+    }).catch(function(err){
+      msg.className='err';
+      msg.textContent=(err&&err.message)||'Could not confirm payment. If PayPal charged you, sign in and contact support with your order id.';
+    });
+  })();
+  </script>
+</body>
+</html>`;
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -293,6 +366,27 @@ async function customerSession(req) {
   const token = bearerToken(req);
   if (!token) return null;
   return auth.getSession(token);
+}
+
+function publicBaseUrl(req) {
+  const configured = process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || '';
+  if (configured) return configured.replace(/\/$/, '');
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'patwago.com';
+  const proto = req.headers['x-forwarded-proto'] || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  return `${proto}://${host}`;
+}
+
+let googleListingCache = { at: 0, count: 0 };
+async function liveGoogleListingCount() {
+  const now = Date.now();
+  if (now - googleListingCache.at < 30 * 60 * 1000 && googleListingCache.count > 0) return googleListingCache.count;
+  try {
+    const rows = await googleMaps.marketplaceSearch({ query: 'Jamaica restaurants tours attractions', region: 'Jamaica', limit: 20 });
+    googleListingCache = { at: now, count: Array.isArray(rows) ? rows.length : 0 };
+  } catch {
+    // keep previous cache on failure
+  }
+  return googleListingCache.count;
 }
 
 async function requireCustomer(req, res, requirePass) {
@@ -346,11 +440,17 @@ async function handleApi(req, res, url) {
   const { pathname, searchParams } = url;
 
   if (req.method === 'GET' && pathname === '/api/health') {
+    const stats = store.dashboardStats();
+    const googleListings = await liveGoogleListingCount();
     return sendJson(res, 200, {
       ok: true,
       service: 'patwago',
       time: new Date().toISOString(),
-      stats: store.dashboardStats(),
+      stats: {
+        ...stats,
+        google_listings: googleListings,
+        vendors: stats.verified_vendors,
+      },
       capabilities: {
         grok: Boolean(process.env.XAI_API_KEY),
         google_maps: googleMaps.configured(),
@@ -756,31 +856,84 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/paypal/purchase-pass') {
-    const session=await requireCustomer(req,res,false);if(!session)return true;
-    const body=await readBody(req);
+    const session = await customerSession(req); // optional — guest checkout allowed from landing
+    const body = await readBody(req);
+    const plan = String(body.plan || '').trim();
+    if (!Object.prototype.hasOwnProperty.call(PLAN_PRICES, plan)) {
+      return sendJson(res, 400, { ok: false, message: `Unknown plan: ${plan}` });
+    }
+    const base = publicBaseUrl(req);
+    const returnUrl = String(body.return_url || `${base}/checkout/complete`).trim();
+    const cancelUrl = String(body.cancel_url || `${base}/#pricing`).trim();
     let order;
     try {
-      order=await paypalService().createOrder({plan:body.plan,return_url:body.return_url,cancel_url:body.cancel_url});
-      await payments.recordOrderCreated({order_id:order.order_id,plan:order.plan,amount:order.amount,currency:order.currency,customer_id:session.customer_id});
+      order = await paypalService().createOrder({
+        plan,
+        return_url: returnUrl,
+        cancel_url: cancelUrl,
+        description: body.description,
+      });
+      await payments.recordOrderCreated({
+        order_id: order.order_id,
+        plan: order.plan,
+        amount: order.amount,
+        currency: order.currency,
+        customer_id: session ? session.customer_id : null,
+      });
     } catch (error) {
-      if (!shouldUseLocalCheckoutFallback(error)) throw error;
-      const plan=String(body.plan || '').trim();
-      if (!Object.prototype.hasOwnProperty.call(PLAN_PRICES, plan)) return sendJson(res,400,{ok:false,message:`Unknown plan: ${plan}`});
-      order=store.createPaymentOrder({plan,amount:PLAN_PRICES[plan],description:body.description || `${plan} pass`,buyer:session.customer_id});
+      if (!shouldUseLocalCheckoutFallback(error)) {
+        return sendJson(res, 502, { ok: false, message: error.message || 'PayPal checkout unavailable' });
+      }
+      order = store.createPaymentOrder({
+        plan,
+        amount: PLAN_PRICES[plan],
+        description: body.description || `${plan} pass`,
+        buyer: session ? session.customer_id : 'guest',
+      });
     }
-    return sendJson(res,201,{ok:true,approval_url:order.approval_url,approvalUrl:order.approval_url,order_id:order.order_id,orderId:order.order_id,data:order,environment:order.environment});
+    return sendJson(res, 201, {
+      ok: true,
+      approval_url: order.approval_url,
+      approvalUrl: order.approval_url,
+      order_id: order.order_id,
+      orderId: order.order_id,
+      data: order,
+      environment: order.environment,
+      guest: !session,
+    });
   }
 
   if (req.method === 'POST' && /^\/api\/paypal\/orders\/[^/]+\/capture$/.test(pathname)) {
-    const session=await requireCustomer(req,res,false);if(!session)return true;
-    const orderId=decodeURIComponent(pathname.split('/')[4]);
-    const payment=await paypalService().captureOrder(orderId);
-    const { wasAlreadyCompleted }=await payments.recordCapture(payment,{customer_id:session.customer_id});
-    if(payment.status!=='completed')return sendJson(res,409,{ok:false,message:'PayPal payment is not completed',data:payment});
-    const pass=wasAlreadyCompleted
-      ? (await auth.listPasses(session.customer_id)).find((p)=>p.plan===payment.plan)||null
-      : await auth.createPass({customer_id:session.customer_id,plan:payment.plan});
-    return sendJson(res,200,{ok:true,data:{...payment,pass}});
+    const session = await customerSession(req); // optional for guest capture
+    const orderId = decodeURIComponent(pathname.split('/')[4]);
+    try {
+      const payment = await paypalService().captureOrder(orderId);
+      const known = await payments.getByOrderId(orderId);
+      const customerId = session?.customer_id || known?.customer_id || null;
+      const { wasAlreadyCompleted } = await payments.recordCapture(payment, { customer_id: customerId });
+      if (payment.status !== 'completed') {
+        return sendJson(res, 409, { ok: false, message: 'PayPal payment is not completed', data: payment });
+      }
+      let pass = null;
+      if (customerId) {
+        pass = wasAlreadyCompleted
+          ? (await auth.listPasses(customerId)).find((p) => p.plan === payment.plan) || null
+          : await auth.createPass({ customer_id: customerId, plan: payment.plan });
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        data: {
+          ...payment,
+          pass,
+          needs_account: !customerId,
+          activate_hint: customerId
+            ? 'Pass activated'
+            : 'Payment captured. Create or sign in to your PatWaGo account to attach this pass.',
+        },
+      });
+    } catch (error) {
+      return sendJson(res, 502, { ok: false, message: error.message || 'Capture failed' });
+    }
   }
 
   if(req.method==='POST'&&pathname==='/api/paypal/webhook'){
@@ -811,9 +964,29 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'GET' && pathname === '/api/dashboard') {
+    const session = await customerSession(req);
+    const stats = store.dashboardStats();
+    const googleListings = await liveGoogleListingCount();
+    let myTrips = 0;
+    let myCheckins = 0;
+    if (session) {
+      try {
+        myTrips = (await customerData.listTrips(session.customer_id)).length;
+        myCheckins = (await customerData.listCheckins(session.customer_id)).length;
+      } catch {
+        myTrips = 0;
+        myCheckins = 0;
+      }
+    }
     return sendJson(res, 200, {
       ok: true,
-      data: store.dashboardStats(),
+      data: {
+        ...stats,
+        google_listings: googleListings,
+        vendors: stats.verified_vendors,
+        trips: myTrips,
+        checkins: myCheckins,
+      },
     });
   }
 
@@ -821,14 +994,21 @@ async function handleApi(req, res, url) {
 }
 
 function handleCheckout(req, res, url) {
+  if (req.method !== 'GET') return null;
+
+  if (url.pathname === '/checkout/complete' || url.pathname === '/checkout/complete/') {
+    const token = url.searchParams.get('token') || url.searchParams.get('order_id') || '';
+    return sendHtml(res, 200, renderCheckoutCompletePage(token));
+  }
+
   const match = url.pathname.match(/^\/checkout\/paypal\/([^/]+)$/);
-  if (!match || req.method !== 'GET') return null;
+  if (!match) return null;
   const order = store.getPaymentOrder(match[1]);
   if (!order) return sendText(res, 404, 'Checkout order not found');
   return sendHtml(res, 200, renderCheckoutPage(order));
 }
 
-function handleAppPages(req, res, url) {
+async function handleAppPages(req, res, url) {
   if (req.method !== 'GET') return null;
   const pathname = url.pathname.replace(/\/$/, '') || '/';
   let html = null;
@@ -836,20 +1016,40 @@ function handleAppPages(req, res, url) {
   else if (pathname === '/account' || pathname === '/account/onboarding') html = appPages.accountPage('onboarding');
   else if (pathname === '/account/login') html = appPages.accountPage('auth');
   else if (pathname === '/account/paywall') html = appPages.accountPage('trial');
-  else if (pathname === '/app') html = appPages.dashboard();
-  else if (pathname === '/app/translate') html = appPages.translatePage();
-  else if (pathname === '/app/vendors') html = appPages.vendorsPage();
-  else if (pathname === '/app/trips') html = appPages.tripsPage();
-  else if (pathname === '/app/trips/new') html = appPages.aiPlannerPage();
-  else if (pathname === '/app/voice') html = appPages.voicePage();
-  else if (pathname === '/app/guardian') html = appPages.guardianPage();
-  else if (pathname === '/app/profile') html = appPages.profilePage();
-  else {
-    const match = pathname.match(/^\/app\/vendor\/([^/]+)$/);
-    if (match) html = appPages.vendorDetailPage(decodeURIComponent(match[1]));
+  else if (pathname === '/app' || pathname.startsWith('/app/')) {
+    const session = await customerSession(req);
+    if (!session) {
+      res.writeHead(302, {
+        Location: `/account/login?next=${encodeURIComponent(pathname)}`,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return true;
+    }
+    if (!(await auth.hasActivePass(session.customer_id))) {
+      res.writeHead(302, {
+        Location: `/account/paywall?next=${encodeURIComponent(pathname)}`,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return true;
+    }
+    if (pathname === '/app') html = appPages.dashboard();
+    else if (pathname === '/app/translate') html = appPages.translatePage();
+    else if (pathname === '/app/vendors') html = appPages.vendorsPage();
+    else if (pathname === '/app/trips') html = appPages.tripsPage();
+    else if (pathname === '/app/trips/new') html = appPages.aiPlannerPage();
+    else if (pathname === '/app/voice') html = appPages.voicePage();
+    else if (pathname === '/app/guardian') html = appPages.guardianPage();
+    else if (pathname === '/app/profile') html = appPages.profilePage();
+    else {
+      const match = pathname.match(/^\/app\/vendor\/([^/]+)$/);
+      if (match) html = appPages.vendorDetailPage(decodeURIComponent(match[1]));
+    }
+    if (!html) return sendText(res, 404, 'App page not found');
+    return sendHtml(res, 200, html);
   }
   if (html) return sendHtml(res, 200, html);
-  if (pathname.startsWith('/app/')) return sendText(res, 404, 'App page not found');
   return null;
 }
 
@@ -889,7 +1089,7 @@ async function requestListener(req, res) {
 
   if (handleStatic(req, res, url)) return;
 
-  const appPage = handleAppPages(req, res, url);
+  const appPage = await handleAppPages(req, res, url);
   if (appPage) return;
 
   if (req.method === 'GET') {

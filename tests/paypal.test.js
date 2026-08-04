@@ -52,7 +52,7 @@ function pp(code) {
 test('PLAN_PRICES is the single source of truth and never trusts client amount', () => {
   assert.equal(PLAN_PRICES.day, 9.99);
   assert.equal(PLAN_PRICES.week, 29.99);
-  assert.equal(PLAN_PRICES.trip, 49.99);
+  assert.equal(PLAN_PRICES.trip, 29.99);
   assert.equal(Object.keys(PLAN_PRICES).length, 3);
 });
 
@@ -190,28 +190,28 @@ test('captureOrder returns completed payment contract with server amount', async
 test('captureOrder with non-completed status returns capture payload with status', async () => {
   const fetch = mockFetch([
     ['/oauth2/token', pp({ access_token: 'tok-c', expires_in: 3200, token_type: 'Bearer' })],
-    ['/capture', pp({ id: 'CAP-1', status: 'PENDING', purchase_units: [{ payments: { captures: [{ id: 'CAP-1', amount: { value: '49.99' } }] }, reference_id: 'trip' }] })],
+    ['/capture', pp({ id: 'CAP-1', status: 'PENDING', purchase_units: [{ payments: { captures: [{ id: 'CAP-1', amount: { value: '29.99' } }] }, reference_id: 'trip' }] })],
   ], []);
 
   const svc = createPayPalService({ env: baseEnv(), fetch });
   const result = await svc.captureOrder('ORD-1');
 
   assert.equal(result.status, 'pending');
-  assert.equal(result.amount, 49.99);
+  assert.equal(result.amount, 29.99);
   assert.equal(result.plan, 'trip');
 });
 
 test('captureOrder maps purchase_units[0].reference_id to plan; falls back to trip', async () => {
   const fetch = mockFetch([
     ['/oauth2/token', pp({ access_token: 'tok-c', expires_in: 3200, token_type: 'Bearer' })],
-    ['/capture', pp({ id: 'CAP-1', status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ id: 'CAP-1', amount: { value: '49.99', currency_code: 'USD' } }] }, reference_id: 'trip' }], payer: {} })],
+    ['/capture', pp({ id: 'CAP-1', status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ id: 'CAP-1', amount: { value: '29.99', currency_code: 'USD' } }] }, reference_id: 'trip' }], payer: {} })],
   ], []);
 
   const svc = createPayPalService({ env: baseEnv(), fetch });
   const result = await svc.captureOrder('ORD-1');
 
   assert.equal(result.plan, 'trip');
-  assert.equal(result.amount, 49.99);
+  assert.equal(result.amount, 29.99);
   assert.equal(result.status, 'completed');
 });
 
@@ -364,7 +364,7 @@ test('completed payment record has all required contract fields', async () => {
     ['/oauth2/token', pp({ access_token: 'tok-c', expires_in: 3200, token_type: 'Bearer' })],
     ['/capture', pp({
       id: 'CAP-2', status: 'COMPLETED',
-      purchase_units: [{ payments: { captures: [{ id: 'CAP-2', amount: { value: '49.99', currency_code: 'USD' } }] }, reference_id: 'trip' }],
+      purchase_units: [{ payments: { captures: [{ id: 'CAP-2', amount: { value: '29.99', currency_code: 'USD' } }] }, reference_id: 'trip' }],
       payer: { email_address: 'x@y.com', payer_id: 'PID-1' },
     })],
   ], []);
@@ -378,7 +378,7 @@ test('completed payment record has all required contract fields', async () => {
   }
   assert.equal(record.status, 'completed');
   assert.equal(record.plan, 'trip');
-  assert.equal(record.amount, 49.99);
+  assert.equal(record.amount, 29.99);
   assert.equal(record.currency, 'USD');
   assert.equal(record.capture_id, 'CAP-2');
   assert.equal(record.paypal_email || record.payer_email, 'x@y.com');
@@ -441,8 +441,8 @@ test('client-supplied amount of 0.01 still charges full plan price', async () =>
 
   const svc = createPayPalService({ env: baseEnv(), fetch });
   const order = await svc.createOrder({ plan: 'trip', amount: 0.01 });
-  assert.equal(order.amount, 49.99, 'server price enforced');
+  assert.equal(order.amount, 29.99, 'server price enforced');
 
   const sent = JSON.parse(calls.find((c) => c.url.includes('/v2/checkout/orders')).init.body);
-  assert.equal(sent.purchase_units[0].amount.value, '49.99');
+  assert.equal(sent.purchase_units[0].amount.value, '29.99');
 });

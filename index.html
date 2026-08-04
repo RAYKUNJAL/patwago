@@ -664,7 +664,7 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
       <a href="#vendor-signup">For tour operators</a>
     </div>
     <div class="nav-cta">
-      <a href="/app" class="btn btn-ghost">Open app</a>
+      <a href="/account/login?next=/app" class="btn btn-ghost">Sign in</a>
       <a href="#pricing" class="btn btn-gold">Start free trial</a>
     </div>
     <button class="hamburger" id="hamburger" aria-label="Menu">
@@ -680,7 +680,7 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
   <a href="#safety">Safety</a>
   <a href="#vendors">Vendors</a>
   <a href="#vendor-signup">Become a Vendor</a>
-  <a href="/app" class="btn btn-gold">Open app</a>
+  <a href="/account/onboarding" class="btn btn-gold">Get access</a>
 </div>
 
 <!-- HERO -->
@@ -1852,35 +1852,41 @@ function setupPayPalButtons(){
     }
 
     btn.addEventListener('click',function(){
-      btn.disabled=true;
-      var orig=btn.textContent;
-      btn.textContent='Redirecting to PayPal…';
-      recordSaleLocal(plan,amount);
-      fetch(apiBase+'/paypal/purchase-pass',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({plan:plan,amount:parseFloat(amount),description:desc})
-      }).then(function(r){
-        if(!r.ok){return r.json().catch(function(){return{}}).then(function(j){throw new Error(j.message||('HTTP '+r.status))})}
-        return r.json();
-      }).then(function(res){
-        var approvalUrl=res.approval_url||res.approvalUrl||res.redirect_url||res.redirectUrl;
-        if(!approvalUrl&&Array.isArray(res.links)){
-          for(var i=0;i<res.links.length;i++){if(res.links[i].rel==='approve'||res.links[i].rel==='payer-action'){approvalUrl=res.links[i].href;break}}
-        }
-        if(approvalUrl){window.location.href=approvalUrl;return}
-        var thanks=document.createElement('div');
-        thanks.style.cssText='padding:14px;text-align:center;color:var(--green-light);font-weight:700;border-radius:10px;background:rgba(45,106,79,0.2);border:1px solid rgba(45,106,79,0.4)';
-        thanks.innerHTML='✓ Your '+esc(plan)+' pass is being processed. Check your email. 🇯🇲';
-        wrap.innerHTML='';
-        wrap.appendChild(thanks);
-      }).catch(function(err){
-        console.warn('[PatWaGo] purchase-pass failed:',err);
-        showError('Could not start PayPal checkout. Please try again.');
-        btn.disabled=false;
-        btn.textContent=orig;
-      });
-    });
+          btn.disabled=true;
+          var orig=btn.textContent;
+          btn.textContent='Redirecting to PayPal…';
+          recordSaleLocal(plan,amount);
+          fetch(apiBase+'/paypal/purchase-pass',{
+            method:'POST',
+            credentials:'include',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              plan:plan,
+              amount:parseFloat(amount),
+              description:desc,
+              return_url:window.location.origin+'/checkout/complete',
+              cancel_url:window.location.origin+'/#pricing'
+            })
+          }).then(function(r){
+            return r.json().catch(function(){return{}}).then(function(j){
+              if(!r.ok || j.ok===false){throw new Error(j.message||('HTTP '+r.status))}
+              return j;
+            });
+          }).then(function(res){
+            var approvalUrl=res.approval_url||res.approvalUrl||res.redirect_url||res.redirectUrl;
+            if(!approvalUrl&&res.data){approvalUrl=res.data.approval_url||res.data.approvalUrl}
+            if(!approvalUrl&&Array.isArray(res.links)){
+              for(var i=0;i<res.links.length;i++){if(res.links[i].rel==='approve'||res.links[i].rel==='payer-action'){approvalUrl=res.links[i].href;break}}
+            }
+            if(approvalUrl){window.location.href=approvalUrl;return}
+            throw new Error('PayPal did not return an approval URL');
+          }).catch(function(err){
+            console.warn('[PatWaGo] purchase-pass failed:',err);
+            showError((err&&err.message)||'Could not start PayPal checkout. Please try again.');
+            // re-render button after brief error
+            setTimeout(function(){renderButton(wrap)},1800);
+          });
+        });
   }
 
   wraps.forEach(renderButton);
