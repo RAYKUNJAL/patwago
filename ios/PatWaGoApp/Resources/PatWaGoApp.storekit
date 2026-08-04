@@ -1,0 +1,53 @@
+{
+  "identifier" : "5BC03A2F-F63A-4716-8E9A-7B7AA828A5C7",
+  "nonRenewingSubscriptions" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "4FFB3BD7-B4A8-4A98-802E-AF97BFE7967B",
+      "localizations" : [
+        {
+          "description" : "24 hours of full PatWaGo access — translation, verified vendor booking, trips, and Guardian Mode.",
+          "displayName" : "Day Pass",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.patwago.pass.day",
+      "referenceName" : "Day Pass",
+      "type" : "NonRenewingSubscription"
+    },
+    {
+      "displayPrice" : "29.99",
+      "familyShareable" : false,
+      "internalID" : "0D554EA3-6E4E-4638-9DFE-4EC887A41ECF",
+      "localizations" : [
+        {
+          "description" : "7 days of full PatWaGo access — translation, verified vendor booking, trips, and Guardian Mode.",
+          "displayName" : "Trip Pass",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.patwago.pass.trip",
+      "referenceName" : "Trip Pass",
+      "type" : "NonRenewingSubscription"
+    }
+  ],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

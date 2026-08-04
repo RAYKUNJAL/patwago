@@ -10,6 +10,7 @@ const translator = require('./lib/translator');
 const analytics = require('./lib/analytics');
 const auth = require('./lib/auth');
 const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
+const { createAppStoreVerifier } = require('./lib/appstore');
 const customerData = require('./lib/customer-data');
 
 const ROOT = store.ROOT;
@@ -265,6 +266,10 @@ async function requireCustomer(req, res, requirePass) {
 
 function paypalService() {
   return createPayPalService({ env: process.env, fetch: globalThis.fetch });
+}
+
+function appStoreVerifier() {
+  return createAppStoreVerifier({ env: process.env });
 }
 
 function shouldUseLocalCheckoutFallback(error) {
@@ -606,6 +611,34 @@ async function handleApi(req, res, url) {
     const result=await paypalService().verifyWebhook({headers:req.headers,body:raw.toString('utf8')});
     if(!result.verified)return sendJson(res,400,{ok:false,message:result.reason||'Invalid webhook signature'});
     return sendJson(res,200,{ok:true});
+  }
+
+  // Apple Guideline 3.1.1: the native iOS app buys passes through Apple's
+  // In-App Purchase (see the /api/paypal/purchase-pass gate above); this is
+  // where the resulting StoreKit 2 transaction gets verified and credited.
+  if (req.method === 'POST' && pathname === '/api/appstore/verify-purchase') {
+    const session = await requireCustomer(req, res, false);
+    if (!session) return true;
+    const body = await readBody(req);
+    let verifier;
+    try {
+      verifier = appStoreVerifier();
+    } catch (error) {
+      return sendJson(res, 503, { ok: false, message: error.message });
+    }
+    let verified;
+    try {
+      verified = verifier.verifyTransaction(body.signedTransactionInfo);
+    } catch (error) {
+      return sendJson(res, 400, { ok: false, message: error.message });
+    }
+    const { pass, redeemed } = await auth.redeemAppStoreTransaction({
+      customer_id: session.customer_id,
+      transaction_id: verified.transactionId,
+      product_id: verified.productId,
+      plan: verified.plan,
+    });
+    return sendJson(res, redeemed ? 201 : 200, { ok: true, data: { pass, transaction: verified } });
   }
 
   if (req.method === 'GET' && pathname === '/api/dashboard') {

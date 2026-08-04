@@ -3,9 +3,45 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const repoRoot = path.resolve(__dirname, '..');
 const seedFile = path.join(repoRoot, 'data', 'seed.json');
+
+// ---- StoreKit 2 test-transaction signing (see tests/appstore.test.js for
+// unit coverage of the verifier itself; this is just enough to exercise the
+// real /api/appstore/verify-purchase endpoint end to end). ----
+const APPSTORE_FIXTURES = path.join(__dirname, 'fixtures', 'appstore');
+const readFixture = (name) => fs.readFileSync(path.join(APPSTORE_FIXTURES, name), 'utf8');
+const APPSTORE_BUNDLE_ID = 'com.patwago.app';
+
+function derB64FromPem(pem) {
+  return pem.replace(/-----BEGIN CERTIFICATE-----/, '').replace(/-----END CERTIFICATE-----/, '').replace(/\s+/g, '');
+}
+function base64Url(buf) {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function signAppStoreTransaction(overrides = {}) {
+  const leafPem = readFixture('leaf.pem');
+  const leafKeyPem = readFixture('leaf-key.pem');
+  const intermediatePem = readFixture('intermediate.pem');
+  const header = { alg: 'ES256', x5c: [leafPem, intermediatePem].map(derB64FromPem) };
+  const payload = {
+    transactionId: String(Date.now()) + Math.floor(Math.random() * 1000),
+    originalTransactionId: '2000000000000001',
+    bundleId: APPSTORE_BUNDLE_ID,
+    productId: 'com.patwago.pass.day',
+    purchaseDate: Date.now(),
+    signedDate: Date.now(),
+    environment: 'Sandbox',
+    type: 'Non-Renewing Subscription',
+    ...overrides,
+  };
+  const headerB64 = base64Url(Buffer.from(JSON.stringify(header)));
+  const payloadB64 = base64Url(Buffer.from(JSON.stringify(payload)));
+  const signature = crypto.sign('sha256', Buffer.from(`${headerB64}.${payloadB64}`), { key: leafKeyPem, dsaEncoding: 'ieee-p1363' });
+  return `${headerB64}.${payloadB64}.${base64Url(signature)}`;
+}
 
 function makeTempDataDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'patwago-test-'));
@@ -267,6 +303,73 @@ test('iOS native app clients cannot buy passes through PayPal (Apple IAP require
     });
     assert.equal(allowed.status, 201);
   });
+});
+
+test('a verified Apple In-App Purchase credits a pass exactly once, even if replayed', async () => {
+  const priorRoot = process.env.APPSTORE_ROOT_CA_PEM;
+  const priorBundle = process.env.APPSTORE_BUNDLE_ID;
+  delete process.env.APPSTORE_ROOT_CA_PEM;
+  delete process.env.APPSTORE_BUNDLE_ID;
+  try {
+    await withServer(async ({ base }) => {
+      const { cookie } = await registerTrial(base, 'iap-not-configured');
+      const jws = signAppStoreTransaction();
+
+      // Fails closed when the server has no root CA / bundle id configured.
+      const unconfigured = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: jws }),
+      });
+      assert.equal(unconfigured.status, 503);
+    });
+
+    process.env.APPSTORE_ROOT_CA_PEM = readFixture('root-ca.pem');
+    process.env.APPSTORE_BUNDLE_ID = APPSTORE_BUNDLE_ID;
+
+    await withServer(async ({ base }) => {
+      const { cookie } = await registerTrial(base, 'iap-configured');
+
+      const tampered = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: 'not-a-real-jws' }),
+      });
+      assert.equal(tampered.status, 400);
+
+      const jws = signAppStoreTransaction();
+      const first = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: jws }),
+      });
+      assert.equal(first.status, 201);
+      const firstBody = await first.json();
+      assert.equal(firstBody.ok, true);
+      assert.equal(firstBody.data.pass.plan, 'day');
+      assert.equal(firstBody.data.transaction.plan, 'day');
+
+      // StoreKit can redeliver the same transaction (relaunch, entitlement
+      // sync); replaying it must not mint a second pass.
+      const replay = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: jws }),
+      });
+      assert.equal(replay.status, 200);
+      const replayBody = await replay.json();
+      assert.equal(replayBody.data.pass.id, firstBody.data.pass.id);
+
+      const me = await fetch(`${base}/api/account/me`, { headers: { Cookie: cookie } }).then((r) => r.json());
+      assert.equal(me.data.active_pass, true);
+      assert.equal(me.data.passes.filter((p) => p.plan === 'day').length, 1);
+    });
+  } finally {
+    if (priorRoot === undefined) delete process.env.APPSTORE_ROOT_CA_PEM;
+    else process.env.APPSTORE_ROOT_CA_PEM = priorRoot;
+    if (priorBundle === undefined) delete process.env.APPSTORE_BUNDLE_ID;
+    else process.env.APPSTORE_BUNDLE_ID = priorBundle;
+  }
 });
 
 test('real internal app pages and assets are served', async () => {

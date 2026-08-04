@@ -64,15 +64,62 @@
     return n.toFixed(2);
   }
 
-  /* Apple Guideline 3.1.1: a future native iOS wrapper must set
-   * window.PatWaGoNative = { platform: 'ios' } before this script runs so
-   * pass purchases route to Apple In-App Purchase instead of PayPal. No
-   * native wrapper exists in this repo yet, so this is false everywhere
-   * today; the server also refuses PayPal pass purchases from any client
-   * that sends the X-Patwago-Client: ios-app header (see server.js). */
+  /* Apple Guideline 3.1.1: the native iOS wrapper (ios/PatWaGoApp) injects
+   * window.PatWaGoNative = { platform: 'ios' } before this script runs, via
+   * a WKUserScript at document-start, so pass purchases route to Apple
+   * In-App Purchase instead of PayPal. On the plain website this stays
+   * undefined/false. The server also refuses PayPal pass purchases from
+   * any client that sends the X-Patwago-Client: ios-app header (server.js). */
   function isIosNativeApp() {
     return Boolean(window.PatWaGoNative && window.PatWaGoNative.platform === 'ios');
   }
+
+  // currentMount tracks the last mount() call so the native-purchase
+  // completion callbacks below (invoked by Swift via evaluateJavaScript,
+  // not by any click inside this page) know where to re-render.
+  var currentMount = null;
+
+  /* Ask the native shell to run the real StoreKit 2 purchase UI for `plan`.
+   * ios/PatWaGoApp/Sources/App/WebView.swift registers "patwagoIAP" as a
+   * WKScriptMessageHandler and calls IAPManager.purchase(for:) on receipt.
+   * Returns false (and the caller should fall back to an error message) if
+   * no native bridge is present — e.g. a bug where isIosNativeApp() is true
+   * but the message handler wasn't registered. */
+  function requestNativePurchase(plan) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.patwagoIAP) {
+      window.webkit.messageHandlers.patwagoIAP.postMessage({ plan: plan });
+      return true;
+    }
+    return false;
+  }
+
+  /* Called by IAPManager.swift (via evaluateJavaScript) after StoreKit
+   * reports a successful purchase. signedTransactionInfo is the JWS from
+   * Transaction.jwsRepresentation; the server independently verifies it
+   * (lib/appstore.js) before crediting a pass — the app never trusts its
+   * own claim that a purchase succeeded. */
+  function handleNativePurchaseComplete(plan, signedTransactionInfo) {
+    jsonFetch('/api/appstore/verify-purchase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signedTransactionInfo: signedTransactionInfo }),
+    }).then(function () {
+      toast('Purchase complete. Your pass is active.');
+      if (currentMount) bootstrapProfile(currentMount.container, currentMount.opts);
+    }).catch(function (err) {
+      toast(err.message || 'Your purchase went through with Apple but PatWaGo could not activate it. Contact support.', true);
+    });
+  }
+
+  /* Called by IAPManager.swift when the user cancels or StoreKit reports a
+   * failure — includes plain "user tapped Cancel", which is not an error. */
+  function handleNativePurchaseFailed(plan, message) {
+    if (message) toast(message, true);
+  }
+
+  window.PatWaGoNative = window.PatWaGoNative || {};
+  window.PatWaGoNative.onPurchaseComplete = handleNativePurchaseComplete;
+  window.PatWaGoNative.onPurchaseFailed = handleNativePurchaseFailed;
 
   /* ---------- renderers (return HTML strings) ---------- */
 
@@ -288,6 +335,7 @@
       // fall back to body
       container = document.body;
     }
+    currentMount = { container: container, opts: opts };
     var state = opts.state || 'onboarding';
     render(container, state, opts);
     if (state === 'profile') bootstrapProfile(container, opts);
@@ -379,8 +427,12 @@
         var amount = el.getAttribute('data-amount') || '9.99';
         if (isIosNativeApp()) {
           // Apple Guideline 3.1.1: no external (PayPal) purchase path for
-          // digital passes inside the native iOS app.
-          toast('Purchase passes from the App Store subscription sheet inside the app.', true);
+          // digital passes inside the native iOS app — hand off to
+          // StoreKit via the native bridge; handleNativePurchaseComplete
+          // picks the flow back up once Apple confirms the purchase.
+          if (!requestNativePurchase(plan)) {
+            toast('In-App Purchase is unavailable in this build.', true);
+          }
           break;
         }
         // ask parent to create an order, then render checkout
@@ -535,6 +587,7 @@
     renderProfile: renderProfile,
     renderDeleteConfirm: renderDeleteConfirm,
     isIosNativeApp: isIosNativeApp,
+    requestNativePurchase: requestNativePurchase,
     mount: mount,
     toast: toast,
     escapeHtml: escapeHtml,
