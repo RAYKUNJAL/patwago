@@ -199,6 +199,24 @@ nav.scrolled{
   background:radial-gradient(circle,rgba(255,215,0,0.08),transparent 70%);
   z-index:-1;filter:blur(20px);
 }
+/* ---------- HERO DEMO CRO ---------- */
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:18px}
+.demo-side{width:min(360px,100%);text-align:center}
+.demo-mode-toggle{display:inline-flex;gap:6px;margin:0 auto 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:999px;padding:4px}
+.mode-btn{padding:8px 18px;border:none;background:transparent;color:var(--text-muted);font-weight:600;border-radius:999px;cursor:pointer;font-size:13px;transition:all .2s ease}
+.mode-btn.active{background:var(--gold);color:#0A0A0A}
+.demo-text-mode{display:grid;gap:10px;margin-bottom:14px}
+.demo-text-mode[hidden]{display:none!important}
+.demo-text-mode textarea{width:100%;min-height:84px;resize:vertical;border-radius:14px;border:1px solid rgba(255,215,0,0.22);background:rgba(0,0,0,0.35);color:var(--text);padding:12px 14px;font:inherit}
+.demo-text-mode textarea:focus{outline:2px solid rgba(255,215,0,0.45);outline-offset:1px}
+.btn-block{width:100%;justify-content:center}
+.demo-examples-label{font-size:13px;color:var(--text-dim);margin:4px 0 10px}
+.example-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.example-chip{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);padding:8px 14px;border-radius:999px;font-size:12.5px;cursor:pointer;transition:all .2s ease}
+.example-chip:hover,.example-chip:focus-visible{background:rgba(255,215,0,0.1);border-color:var(--gold);color:var(--gold);outline:none}
+.demo-cta-mini{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin-top:14px}
+.demo-cta-mini span{font-size:12px;color:var(--text-dim)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* ---------- FEATURES ---------- */
 .features{padding:100px 0}
 .section-head{text-align:center;max-width:640px;margin:0 auto 56px}
@@ -682,14 +700,37 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
             <div class="ts-bubble them"><span class="lbl">PatWaGo · Patois</span>Im open now?</div>
           </div>
           <button class="ts-mic" id="micBtn" aria-label="Tap to speak" title="Tap to speak">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            <span class="mic-hint">Tap to speak</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-</header>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                      <span class="mic-hint">Tap to speak</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="demo-side" id="demo">
+                  <div class="demo-mode-toggle" role="tablist" aria-label="Demo mode">
+                    <button type="button" class="mode-btn active" data-mode="voice" id="demoModeVoice">🎤 Speak</button>
+                    <button type="button" class="mode-btn" data-mode="text" id="demoModeText">💬 Type</button>
+                  </div>
+                  <div id="demoTextMode" class="demo-text-mode" hidden>
+                    <label class="sr-only" for="demoInput">Type a phrase in English</label>
+                    <textarea id="demoInput" rows="3" maxlength="280" placeholder="Where can I get good jerk chicken near here?"></textarea>
+                    <button type="button" id="demoSpeakBtn" class="btn btn-gold btn-block">Speak with Jamaican Voice →</button>
+                  </div>
+                  <p class="demo-examples-label">Or try one of these:</p>
+                  <div class="example-chips" id="demoExampleChips">
+                    <button type="button" class="example-chip" data-text="Where can I get good jerk chicken near here?">Where’s good jerk chicken?</button>
+                    <button type="button" class="example-chip" data-text="How much is the taxi to Negril?">Taxi price to Negril?</button>
+                    <button type="button" class="example-chip" data-text="Is it safe to walk around at night?">Is it safe at night?</button>
+                    <button type="button" class="example-chip" data-text="Where is the nearest beach with clear water?">Nearest nice beach?</button>
+                    <button type="button" class="example-chip" data-text="Can you help me with directions to Dunn's River Falls?">Directions to Dunn’s River?</button>
+                  </div>
+                  <div class="demo-cta-mini">
+                    <span id="demoAttemptsLabel">3 free demo attempts</span>
+                    <a href="#pricing" class="btn btn-ghost">Start free trial →</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
 
 <!-- WHY PATWAGO - PAIN POINTS -->
 <section class="painpoints" id="why">
@@ -1295,12 +1336,18 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
   var micBtn=document.getElementById('micBtn');
   var status=document.getElementById('micStatus');
   var chat=document.getElementById('chatBubbles');
+  var demoInput=document.getElementById('demoInput');
+  var demoSpeakBtn=document.getElementById('demoSpeakBtn');
+  var demoTextMode=document.getElementById('demoTextMode');
+  var attemptsLabel=document.getElementById('demoAttemptsLabel');
+  var modeButtons=document.querySelectorAll('.mode-btn');
   if(!micBtn||!chat)return;
 
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   var recog=null,listening=false;
   var audioCache={};   // text -> {url}  (object URLs for replay)
   var currentAudio=null;
+  var demoBusy=false;
 
   // Lightweight English->Patois phrase map for the in-page demo. The real
   // translation runs server-side via /api/lexicon/translate; this is a showpiece.
@@ -1327,10 +1374,14 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
     [/(^|\s)eat(\s|$)/gi,'$1nyam$2'],
     [/money/gi,'chetta'],
     [/friend/gi,'fren'],
-    [/crazy/gi,'bumbaclot'],
+    [/crazy/gi,'mad'],
     [/very good/gi,'tun up'],
     [/let's go/gi,'mek wi go'],
-    [/where is/gi,'weh deh']
+    [/where is/gi,'weh deh'],
+    [/taxi/gi,'taxi'],
+    [/safe/gi,'safe'],
+    [/night/gi,'nite'],
+    [/directions/gi,'directions']
   ];
   function toPatois(text){
     var t=text;
@@ -1368,6 +1419,15 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
     if(currentAudio){try{currentAudio.pause()}catch(e){}currentAudio=null}
   }
 
+  function setAttemptsLabel(remaining){
+    if(!attemptsLabel)return;
+    if(remaining==null){attemptsLabel.textContent='3 free demo attempts';return}
+    var n=Number(remaining);
+    if(!Number.isFinite(n))return;
+    if(n<=0){attemptsLabel.textContent='Demo limit reached — start free trial';return}
+    attemptsLabel.textContent=n+' demo attempt'+(n===1?'':'s')+' left';
+  }
+
   // Fetch TTS mp3, cache it, and play it. Returns a promise.
   function fetchAndPlayTTS(text,btn){
     var key=text.trim().toLowerCase();
@@ -1381,7 +1441,15 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text:text})
     }).then(function(r){
-      if(!r.ok)throw new Error('HTTP '+r.status);
+      var remaining=r.headers.get('X-Demo-Attempts-Remaining');
+      if(remaining!==null)setAttemptsLabel(remaining);
+      if(!r.ok){
+        return r.json().catch(function(){return {}}).then(function(d){
+          var msg=(d&&d.message)||('HTTP '+r.status);
+          if(r.status===429)setAttemptsLabel(0);
+          throw new Error(msg);
+        });
+      }
       return r.blob();
     }).then(function(blob){
       var url=URL.createObjectURL(blob);
@@ -1389,6 +1457,7 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
       playURL(url);
     }).catch(function(err){
       console.warn('[PatWaGo TTS] failed:',err);
+      setStatus((err&&err.message)||'Voice demo unavailable',true);
       // fallback to browser speech synthesis
       try{if('speechSynthesis' in window){var u=new SpeechSynthesisUtterance(text);u.lang='en-JM';u.rate=0.95;speechSynthesis.speak(u)}}catch(e){}
     }).finally(function(){
@@ -1416,51 +1485,57 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
 
   function setStatus(msg,show){status.textContent=msg||'';if(show!==false){status.classList.add('show')}else{status.classList.remove('show')}}
 
+  function translateAndSpeak(spoken){
+    spoken=String(spoken||'').trim();
+    if(!spoken||demoBusy)return Promise.resolve();
+    demoBusy=true;
+    if(demoSpeakBtn)demoSpeakBtn.disabled=true;
+    addBubble('me','You · English',spoken,false);
+    setStatus('Translating…',true);
+    return fetch('/api/lexicon/translate?q='+encodeURIComponent(spoken))
+      .then(function(r){return r.ok?r.json():null})
+      .then(function(d){
+        var t=(d&&d.source!=='not-found'&&d.translation)?d.translation:'';
+        return t||toPatois(spoken);
+      })
+      .catch(function(){return toPatois(spoken)})
+      .then(function(patois){
+        var bub=addBubble('them','PatWaGo · Patois',patois,true);
+        setStatus('Tap mic, then speak',true);
+        var btn=bub.querySelector('.spk-btn');
+        return fetchAndPlayTTS(patois,btn);
+      })
+      .finally(function(){
+        demoBusy=false;
+        if(demoSpeakBtn)demoSpeakBtn.disabled=false;
+      });
+  }
+
   function startRecog(){
     if(!SR){setStatus('Voice input not supported in this browser',true);return}
     recog=new SR();
     recog.lang='en-US';
     recog.interimResults=true;
     recog.continuous=false;
-    recog.onstart=function(){listening=true;micBtn.classList.add('listening');setStatus('Listening\u2026 speak now',true)};
+    recog.onstart=function(){listening=true;micBtn.classList.add('listening');setStatus('Listening… speak now',true)};
     recog.onerror=function(e){
       listening=false;micBtn.classList.remove('listening');
       var msg='Microphone error';
-      if(e.error==='not-allowed'||e.error==='permission-denied'){msg='Mic access denied \u2014 allow microphone permission'}
-      else if(e.error==='no-speech'){msg='No speech detected \u2014 try again'}
+      if(e.error==='not-allowed'||e.error==='permission-denied'){msg='Mic access denied — allow microphone permission'}
+      else if(e.error==='no-speech'){msg='No speech detected — try again'}
       else if(e.error==='network'){msg='Network error during recognition'}
       else{msg='Error: '+e.error}
       setStatus(msg,true);
     };
-    recog.onend=function(){listening=false;micBtn.classList.remove('listening');if(status.textContent==='Listening\u2026 speak now'){setStatus('Tap mic, then speak',true)}};
+    recog.onend=function(){listening=false;micBtn.classList.remove('listening');if(status.textContent==='Listening… speak now'){setStatus('Tap mic, then speak',true)}};
     recog.onresult=function(ev){
       var interim='',finalT='';
       for(var i=ev.resultIndex;i<ev.results.length;i++){
         var r=ev.results[i];
         if(r.isFinal){finalT+=r[0].transcript}else{interim+=r[0].transcript}
       }
-      if(interim){setStatus('\u2026 '+interim.slice(0,60),true)}
-      if(finalT){
-        var spoken=finalT.trim();
-        addBubble('me','You \u00b7 English',spoken,false);
-        setStatus('Translating\u2026',true);
-        // Translate via the lexicon API; fall back to the local phrase map
-        // when the offline lexicon has no match for the spoken phrase.
-        fetch('/api/lexicon/translate?q='+encodeURIComponent(spoken))
-          .then(function(r){return r.ok?r.json():null})
-          .then(function(d){
-            var t=(d&&d.source!=='not-found'&&d.translation)?d.translation:'';
-            return t||toPatois(spoken);
-          })
-          .catch(function(){return toPatois(spoken)})
-          .then(function(patois){
-            var bub=addBubble('them','PatWaGo \u00b7 Patois',patois,true);
-            setStatus('Tap mic, then speak',true);
-            // auto-play TTS audio of the Patois translation
-            var btn=bub.querySelector('.spk-btn');
-            fetchAndPlayTTS(patois,btn);
-          });
-      }
+      if(interim){setStatus('… '+interim.slice(0,60),true)}
+      if(finalT){translateAndSpeak(finalT.trim())}
     };
     try{recog.start()}catch(e){setStatus('Could not start mic',true)}
   }
@@ -1474,6 +1549,41 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
   }
   setStatus('Tap mic, then speak',true);
 
+  // Mode toggle: Speak / Type
+  modeButtons.forEach(function(btn){
+    btn.addEventListener('click',function(){
+      modeButtons.forEach(function(b){b.classList.remove('active')});
+      btn.classList.add('active');
+      var mode=btn.getAttribute('data-mode');
+      if(demoTextMode){
+        if(mode==='text'){demoTextMode.hidden=false;if(demoInput)demoInput.focus()}
+        else{demoTextMode.hidden=true}
+      }
+    });
+  });
+
+  if(demoSpeakBtn&&demoInput){
+    demoSpeakBtn.addEventListener('click',function(){
+      var text=demoInput.value.trim();
+      if(!text){setStatus('Type a phrase first',true);return}
+      translateAndSpeak(text);
+    });
+    demoInput.addEventListener('keydown',function(e){
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();demoSpeakBtn.click()}
+    });
+  }
+
+  // Example chips auto-run the demo
+  Array.prototype.forEach.call(document.querySelectorAll('.example-chip'),function(chip){
+    chip.addEventListener('click',function(){
+      var text=chip.getAttribute('data-text')||chip.textContent||'';
+      if(demoInput)demoInput.value=text;
+      if(demoTextMode)demoTextMode.hidden=false;
+      modeButtons.forEach(function(b){b.classList.toggle('active',b.getAttribute('data-mode')==='text')});
+      translateAndSpeak(text);
+    });
+  });
+
   // Enhance the existing static "them" bubbles with speaker buttons
   Array.prototype.forEach.call(chat.querySelectorAll('.ts-bubble.them'),function(b){
     if(b.querySelector('.spk-btn'))return; // already has one
@@ -1481,7 +1591,6 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
     var text=txtNode?txtNode.nextSibling&&txtNode.nextSibling.nodeValue?txtNode.nextSibling.nodeValue.trim():'':'';
     if(!text)return;
     // wrap existing text in bubble-row with a speaker button
-    var lbl=b.querySelector('.lbl');
     var raw=b.innerHTML;
     // extract label + text
     var m=raw.match(/<span class="lbl">([\s\S]*?)<\/span>([\s\S]*)$/);

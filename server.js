@@ -13,6 +13,8 @@ const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
 const customerData = require('./lib/customer-data');
 const payments = require('./lib/payments');
 const { createRateLimiter } = require('./lib/rate-limit');
+const googleMaps = require('./lib/google-maps');
+const { speakWithElevenLabs } = require('./lib/elevenlabs');
 // Simple in-memory rate limiter for landing page demo (3 attempts per IP per hour)
 const demoAttempts = new Map();
 const DEMO_MAX_ATTEMPTS = 3;
