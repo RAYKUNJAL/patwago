@@ -210,7 +210,7 @@
     var turn = document.createElement('div');
     turn.className = 'voice-turn ' + role;
     var label = document.createElement('strong');
-    label.textContent = role === 'assistant' ? 'PatWaGo AI' : 'You';
+    label.textContent = role === 'assistant' ? 'Miss Cleo' : 'You';
     var text = document.createElement('p');
     text.textContent = content;
     turn.appendChild(label); turn.appendChild(text); transcript.appendChild(turn);
@@ -225,7 +225,7 @@
       });
   }
   function askVoice(message, source) {
-    addTurn('user', message); voiceStatus.textContent = 'PatWaGo AI is thinking…';
+    addTurn('user', message); voiceStatus.textContent = 'Miss Cleo is thinking…';
     return jsonFetch('/api/ai/concierge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: voiceSession, message: message, source: source || 'text' }) })
       .then(function (payload) { addTurn('assistant', payload.data.reply); speak(payload.data.reply); voiceStatus.textContent = 'Ready'; })
       .catch(function (error) { toast(error.message, true); voiceStatus.textContent = 'Try again'; });
