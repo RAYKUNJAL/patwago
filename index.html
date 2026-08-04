@@ -1499,6 +1499,14 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
    Each .paypal-wrap becomes a "Pay $<amount> with PayPal" button that POSTs
    to /api/paypal/purchase-pass. The server creates a PayPal order and returns
    an approval URL; we redirect the buyer there to complete payment. */
+/* Apple Guideline 3.1.1: a future native iOS wrapper must set
+   window.PatWaGoNative = { platform: 'ios' } before this script runs so
+   digital pass purchases route to Apple In-App Purchase instead of PayPal.
+   No native wrapper exists yet, so this is false on the public website;
+   the server also refuses PayPal pass purchases from any client sending
+   the X-Patwago-Client: ios-app header (see server.js). */
+function isIosNativeApp(){return Boolean(window.PatWaGoNative&&window.PatWaGoNative.platform==='ios')}
+
 function setupPayPalButtons(){
   var wraps=document.querySelectorAll('.paypal-wrap[data-plan]');
   if(!wraps.length)return;
@@ -1517,6 +1525,11 @@ function setupPayPalButtons(){
     var amount=wrap.getAttribute('data-amount');
     var desc=wrap.getAttribute('data-desc')||('PatWaGo '+plan+' pass');
     var planLabel=(plan==='day')?'$9.99':(plan==='trip')?'$29.99':('$'+amount);
+
+    if(isIosNativeApp()){
+      wrap.innerHTML='<div class="pp-loading">Purchase this pass in the app using Apple’s In-App Purchase sheet.</div>';
+      return;
+    }
 
     wrap.innerHTML='<button class="pp-direct-btn" data-plan="'+esc(plan)+'" data-amount="'+esc(amount)+'" data-desc="'+esc(desc)+'">Pay '+planLabel+' with PayPal</button>';
     var btn=wrap.querySelector('.pp-direct-btn');
@@ -1943,7 +1956,7 @@ else{setupPayPalButtons()}
 
 <h3 id="pp-retention">Data Retention</h3>
 <ul>
-<li>Account data: kept while your account is active; deleted within 30 days of account closure.</li>
+<li>Account data: deleted immediately when you delete your account in <em>Profile &rarr; Delete account</em>; if you contact us to close it instead, within 30 days.</li>
 <li>Booking data: kept for 7 years for tax and dispute records (Jamaican business records requirement).</li>
 <li>Payment data: kept for 7 years for financial regulations.</li>
 <li>Translation logs: kept for 90 days, then aggregated and anonymised.</li>
@@ -1963,7 +1976,7 @@ else{setupPayPalButtons()}
 <li><strong>Objection</strong> &mdash; object to processing based on legitimate interests.</li>
 <li><strong>Withdraw consent</strong> &mdash; for marketing and any consent-based processing.</li>
 </ul>
-<p>To exercise any of these rights, email <a href="mailto:privacy@patwago.com">privacy@patwago.com</a>. We respond within 30 days. There is no charge for a reasonable request; we may charge a reasonable fee for clearly unfounded or excessive requests.</p>
+<p>You can delete your account and personal data yourself at any time in <em>Profile &rarr; Delete account</em> &mdash; no need to contact us. To exercise any other right, email <a href="mailto:privacy@patwago.com">privacy@patwago.com</a>. We respond within 30 days. There is no charge for a reasonable request; we may charge a reasonable fee for clearly unfounded or excessive requests.</p>
 
 <h3 id="pp-children">Children</h3>
 <p>PatWaGo is not directed at children under 16. We do not knowingly collect personal data from anyone under 16. If you believe a minor has registered, contact us and we will delete the account.</p>

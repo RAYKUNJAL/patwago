@@ -210,6 +210,65 @@ test('reviews update vendor stats and checkout flow exists', async () => {
   });
 });
 
+test('customers can self-service delete their account and all owned data', async () => {
+  await withServer(async ({ base }) => {
+    const { cookie } = await registerTrial(base, 'delete-me');
+
+    const trip = await fetch(`${base}/api/trips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'Negril weekend', destination: 'Negril' }),
+    }).then((r) => r.json());
+    assert.equal(trip.ok, true);
+
+    const wrongPassword = await fetch(`${base}/api/account/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ password: 'not-the-password' }),
+    });
+    assert.equal(wrongPassword.status, 401);
+
+    const me = await fetch(`${base}/api/account/me`, { headers: { Cookie: cookie } });
+    assert.equal(me.status, 200);
+
+    const deleted = await fetch(`${base}/api/account/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ password: 'commercial-password' }),
+    }).then((r) => r.json());
+    assert.equal(deleted.ok, true);
+
+    const meAfter = await fetch(`${base}/api/account/me`, { headers: { Cookie: cookie } });
+    assert.equal(meAfter.status, 401);
+
+    const tripsAfter = await fetch(`${base}/api/trips`, { headers: { Cookie: cookie } });
+    assert.equal(tripsAfter.status, 401);
+  });
+});
+
+test('iOS native app clients cannot buy passes through PayPal (Apple IAP required)', async () => {
+  await withServer(async ({ base }) => {
+    const { cookie } = await registerTrial(base, 'ios-iap');
+
+    const blocked = await fetch(`${base}/api/paypal/purchase-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie, 'X-Patwago-Client': 'ios-app' },
+      body: JSON.stringify({ plan: 'day', amount: 9.99, description: 'Day Pass' }),
+    });
+    assert.equal(blocked.status, 403);
+    const blockedBody = await blocked.json();
+    assert.equal(blockedBody.ok, false);
+    assert.equal(blockedBody.code, 'IAP_REQUIRED');
+
+    const allowed = await fetch(`${base}/api/paypal/purchase-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ plan: 'day', amount: 9.99, description: 'Day Pass' }),
+    });
+    assert.equal(allowed.status, 201);
+  });
+});
+
 test('real internal app pages and assets are served', async () => {
   await withServer(async ({ base }) => {
     const routes = [
@@ -220,13 +279,21 @@ test('real internal app pages and assets are served', async () => {
       ['/app/trips/new', /Build my itinerary with AI/],
       ['/app/voice', /Full transcript/],
       ['/app/guardian', /Travel safety check-ins/],
-      ['/app/profile', /Pass & account/],
     ];
     for (const [route, expected] of routes) {
       const response = await fetch(`${base}${route}`);
       assert.equal(response.status, 200, route);
       assert.match(await response.text(), expected, route);
     }
+
+    // /app/profile is the client-rendered account widget (real pass/email
+    // data + self-service delete come from PatWaGoAccountPages.mount at
+    // runtime), so the server response only needs the mount point + script.
+    const profile = await fetch(`${base}/app/profile`);
+    assert.equal(profile.status, 200);
+    const profileHtml = await profile.text();
+    assert.match(profileHtml, /id="patwago-account"/);
+    assert.match(profileHtml, /PatWaGoAccountPages\.mount\("patwago-account",\{state:"profile"\}\)/);
 
     const vendors = await fetch(`${base}/api/vendors?limit=1`).then((r) => r.json());
     const vendor = vendors.data[0];

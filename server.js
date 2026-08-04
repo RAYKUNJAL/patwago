@@ -217,6 +217,17 @@ function requireAdmin(req, res) {
   return true;
 }
 
+// Apple Guideline 3.1.1: digital passes that unlock in-app features/content
+// must be sold through Apple's In-App Purchase, not an external processor
+// like PayPal. There is no native iOS wrapper in this repo yet, but once one
+// exists it must identify itself with this header so the server can refuse
+// to sell passes outside of Apple IAP from inside that shell. Real-world
+// vendor bookings (a driver, a tour, a meal) are unaffected — they are not
+// gated here.
+function isIosNativeClient(req) {
+  return String(req.headers['x-patwago-client'] || '').trim().toLowerCase() === 'ios-app';
+}
+
 function bearerToken(req) {
   const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (bearer) return bearer;
@@ -328,6 +339,22 @@ async function handleApi(req, res, url) {
     if (token) await auth.destroySession(token);
     clearSessionCookie(res);
     return sendJson(res, 200, { ok: true });
+  }
+
+  // Apple Guideline 5.1.1(v): self-service, in-app account deletion.
+  // Requires re-entering the current password so a stray click or a hijacked
+  // session token can't silently destroy the account.
+  if (req.method === 'POST' && pathname === '/api/account/delete') {
+    const session = await requireCustomer(req, res, false);
+    if (!session) return true;
+    const body = await readBody(req);
+    const customer = await auth.getCustomerById(session.customer_id);
+    const confirmed = customer && (await auth.authenticateCustomer({ email: customer.email, password: body.password }));
+    if (!confirmed) return sendJson(res, 401, { ok: false, message: 'Incorrect password. Re-enter your current password to confirm account deletion.' });
+    await auth.deleteCustomer(session.customer_id);
+    customerData.purgeCustomer(session.customer_id);
+    clearSessionCookie(res);
+    return sendJson(res, 200, { ok: true, message: 'Your PatWaGo account and all associated data have been deleted.' });
   }
 
   if (req.method === 'POST' && pathname === '/api/voice/transcribe') {
@@ -549,6 +576,9 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && pathname === '/api/paypal/purchase-pass') {
     const session=await requireCustomer(req,res,false);if(!session)return true;
+    if (isIosNativeClient(req)) {
+      return sendJson(res, 403, { ok: false, code: 'IAP_REQUIRED', message: 'Passes are purchased with Apple In-App Purchase inside the iOS app, not PayPal.' });
+    }
     const body=await readBody(req);
     let order;
     try {
@@ -611,7 +641,7 @@ function handleAppPages(req, res, url) {
   else if (pathname === '/app/trips/new') html = appPages.aiPlannerPage();
   else if (pathname === '/app/voice') html = appPages.voicePage();
   else if (pathname === '/app/guardian') html = appPages.guardianPage();
-  else if (pathname === '/app/profile') html = appPages.profilePage();
+  else if (pathname === '/app/profile') html = appPages.accountPage('profile');
   else {
     const match = pathname.match(/^\/app\/vendor\/([^/]+)$/);
     if (match) html = appPages.vendorDetailPage(decodeURIComponent(match[1]));
