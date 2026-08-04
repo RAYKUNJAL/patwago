@@ -509,10 +509,7 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
 .ts-mic.listening::after{border-color:rgba(255,68,68,0.4)}
 .ts-mic .mic-hint{position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);white-space:nowrap;
   font-size:10px;color:var(--text-dim)}
-.ts-status{position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--gold);
-  background:rgba(255,215,0,0.08);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,215,0,0.2);
-  display:none;white-space:nowrap;z-index:6}
-.ts-status.show{display:block}
+/* status lives inside solid .ts-topchrome — do not absolutely position over the avatar */
 /* ---------- ANIMATIONS ---------- */
 .fade{opacity:1;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
 .fade.in{opacity:1;transform:none}
