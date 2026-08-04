@@ -83,7 +83,7 @@
     [vendorSearch,vendorCategory,vendorRegion,vendorMinRating,vendorVerified].forEach(function(el){if(el)el.addEventListener(el.tagName==='INPUT'?'input':'change',queue)});
     if(vendorMaxPrice)vendorMaxPrice.addEventListener('input',function(){if(priceLabel)priceLabel.textContent='$'+vendorMaxPrice.value;queue()});
     document.querySelectorAll('[data-intent]').forEach(function(btn){btn.addEventListener('click',function(){vendorIntent.value=btn.getAttribute('data-intent');loadVendors()})});
-    var clear=document.getElementById('clearVendorFilters');if(clear)clear.addEventListener('click',function(){vendorSearch.value='';vendorIntent.value='';vendorCategory.value='';vendorRegion.value='';vendorMaxPrice.value='150';vendorMinRating.value='0';vendorVerified.checked=true;if(priceLabel)priceLabel.textContent='$150';loadVendors()});
+    var clear=document.getElementById('clearVendorFilters');if(clear)clear.addEventListener('click',function(){vendorSearch.value='';vendorIntent.value='';vendorCategory.value='';vendorRegion.value='';vendorMaxPrice.value='150';vendorMinRating.value='0';vendorVerified.checked=false;if(priceLabel)priceLabel.textContent='$150';loadVendors()});
     vendorGrid.addEventListener('click',function(e){var card=e.target.closest('[data-vendor-id]');if(card&&window.patwagoAnalytics)window.patwagoAnalytics.track('vendor_view',{vendor_id:card.getAttribute('data-vendor-id')})});
     loadVendors();
   }
@@ -92,26 +92,31 @@
   var googleBusinessQuery = document.getElementById('googleBusinessQuery');
   var googleBusinessResults = document.getElementById('googleBusinessResults');
   if (googleBusinessForm && googleBusinessQuery && googleBusinessResults) {
-    googleBusinessForm.addEventListener('submit', function (event) {
-      event.preventDefault();
-      var q = googleBusinessQuery.value.trim();
-      if (!q) return toast('Enter a business, food, shop, or attraction to search.', true);
-      googleBusinessResults.innerHTML = '<div class="vendor-skel"></div><div class="vendor-skel"></div><div class="vendor-skel"></div>';
-      jsonFetch('/api/maps/businesses?q=' + encodeURIComponent(q) + '&region=Jamaica&limit=9')
-        .then(function (payload) {
-          if (!payload.data.length) {
-            googleBusinessResults.innerHTML = '<div class="empty-results"><h3>No Google listing found</h3><p>Try a different area or business type.</p></div>';
-            return;
-          }
-          googleBusinessResults.innerHTML = payload.data.map(function (p) {
-            var status = p.open_now === null ? 'Hours not listed' : (p.open_now ? 'Open now' : 'May be closed');
-            var photo = p.photo_url ? '<img src="' + escHtml(p.photo_url) + '" alt="' + escHtml(p.name) + '" loading="lazy">' : '';
-            return '<article class="vendor-card glass">' + photo + '<div class="vendor-card-body"><div class="vendor-card-meta"><span class="eyebrow">Google Maps</span><strong>' + status + '</strong></div><h3>' + escHtml(p.name) + '</h3><p class="vendor-summary">' + escHtml(p.address) + '</p><div class="vendor-rating"><span class="stars">★★★★★</span><span>' + (p.rating || '—') + ' · ' + Number(p.user_ratings_total || 0) + ' Google reviews</span></div><div class="vendor-actions"><a class="btn btn-gold" href="' + escHtml(p.maps_url || '#') + '" target="_blank" rel="noopener">Open listing</a><a class="btn btn-ghost" href="/app/vendors?q=' + encodeURIComponent(p.name) + '">Find PatWaGo vendors</a></div></div></article>';
-          }).join('');
-        })
-        .catch(function (error) { googleBusinessResults.innerHTML = '<p class="muted">' + escHtml(error.message) + '</p>'; });
-    });
-  }
+      function runGoogleBusinessSearch() {
+        var q = googleBusinessQuery.value.trim();
+        if (!q) return toast('Enter a business, food, shop, or attraction to search.', true);
+        googleBusinessResults.innerHTML = '<div class="vendor-skel"></div><div class="vendor-skel"></div><div class="vendor-skel"></div>';
+        jsonFetch('/api/maps/businesses?q=' + encodeURIComponent(q) + '&region=Jamaica&limit=9')
+          .then(function (payload) {
+            if (!payload.data.length) {
+              googleBusinessResults.innerHTML = '<div class="empty-results"><h3>No Google listing found</h3><p>Try a different area or business type.</p></div>';
+              return;
+            }
+            googleBusinessResults.innerHTML = payload.data.map(function (p) {
+              var status = p.open_now === null ? 'Hours not listed' : (p.open_now ? 'Open now' : 'May be closed');
+              var photo = p.photo_url ? '<img src="' + escHtml(p.photo_url) + '" alt="' + escHtml(p.name) + '" loading="lazy">' : '';
+              return '<article class="vendor-card glass">' + photo + '<div class="vendor-card-body"><div class="vendor-card-meta"><span class="eyebrow">Google Maps</span><strong>' + status + '</strong></div><h3>' + escHtml(p.name) + '</h3><p class="vendor-summary">' + escHtml(p.address) + '</p><div class="vendor-rating"><span class="stars">★★★★★</span><span>' + (p.rating || '—') + ' · ' + Number(p.user_ratings_total || 0) + ' Google reviews</span></div><div class="vendor-actions"><a class="btn btn-gold" href="' + escHtml(p.maps_url || '#') + '" target="_blank" rel="noopener">Open listing</a><a class="btn btn-ghost" href="/app/vendors?q=' + encodeURIComponent(p.name) + '">Find PatWaGo vendors</a></div></div></article>';
+            }).join('');
+          })
+          .catch(function (error) { googleBusinessResults.innerHTML = '<p class="muted">' + escHtml(error.message) + '</p>'; });
+      }
+      googleBusinessForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        runGoogleBusinessSearch();
+      });
+      // Auto-load a useful Jamaica feed so the marketplace never looks empty
+      runGoogleBusinessSearch();
+    }
 
   var directionsForm = document.getElementById('directionsForm');
   var directionsOrigin = document.getElementById('directionsOrigin');
@@ -244,39 +249,112 @@
   }
   if (voiceForm && voiceInput) voiceForm.addEventListener('submit', function (event) { event.preventDefault(); var message = voiceInput.value.trim(); if (!message) return; voiceInput.value = ''; askVoice(message, 'text'); });
   if (recordBtn) {
-    var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    var recognition = null; var listening = false; var finalText = '';
-    if (Recognition) recordBtn.addEventListener('click', function () {
-      if (listening && recognition) { recognition.stop(); return; }
-      recognition = new Recognition(); recognition.lang = 'en-JM'; recognition.continuous = true; recognition.interimResults = true; finalText = '';
-      recognition.onstart = function () { listening = true; recordBtn.classList.add('recording'); voiceStatus.textContent = 'Listening…'; };
-      recognition.onresult = function (event) { var interim = ''; for (var i = event.resultIndex; i < event.results.length; i++) { if (event.results[i].isFinal) finalText += event.results[i][0].transcript + ' '; else interim += event.results[i][0].transcript; } voiceStatus.textContent = (finalText + interim).trim() || 'Listening…'; };
-      recognition.onend = function () { listening = false; recordBtn.classList.remove('recording'); var message = finalText.trim(); if (message) askVoice(message, 'voice'); else voiceStatus.textContent = 'Ready'; };
-      recognition.onerror = function () { listening = false; recordBtn.classList.remove('recording'); voiceStatus.textContent = 'Could not hear that. Try again.'; };
-      recognition.start();
-    });
-    else if (navigator.mediaDevices && window.MediaRecorder) {
-      var recorder = null; var chunks = [];
-      recordBtn.addEventListener('click', function () {
-        if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-          chunks = []; recorder = new MediaRecorder(stream);
-          recorder.ondataavailable = function (event) { if (event.data.size) chunks.push(event.data); };
-          recorder.onstart = function () { recordBtn.classList.add('recording'); voiceStatus.textContent = 'Recording… tap again to transcribe'; };
-          recorder.onstop = function () {
-            recordBtn.classList.remove('recording'); voiceStatus.textContent = 'Transcribing locally…';
-            stream.getTracks().forEach(function (track) { track.stop(); });
-            var blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-            fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob })
-              .then(function (response) { return response.json().then(function (data) { if (!response.ok) throw new Error(data.message); return data; }); })
-              .then(function (data) { if (data.text) askVoice(data.text, 'voice'); else voiceStatus.textContent = 'No speech detected.'; })
-              .catch(function (error) { voiceStatus.textContent = error.message + '. Use text below.'; });
-          };
-          recorder.start();
-        }).catch(function () { voiceStatus.textContent = 'Microphone permission was denied.'; });
+      var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var recognition = null; var listening = false; var wantListen = false; var finalText = ''; var emptyEnds = 0;
+      if (Recognition) recordBtn.addEventListener('click', function () {
+        if (wantListen) {
+          wantListen = false;
+          listening = false;
+          try { if (recognition) recognition.stop(); } catch (e) {}
+          recordBtn.classList.remove('recording');
+          var message = finalText.trim();
+          if (message) askVoice(message, 'voice');
+          else voiceStatus.textContent = 'Ready';
+          return;
+        }
+        wantListen = true; finalText = ''; emptyEnds = 0;
+        function begin() {
+          if (!wantListen) return;
+          try {
+            recognition = new Recognition();
+            recognition.lang = 'en-JM';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.onstart = function () { listening = true; recordBtn.classList.add('recording'); voiceStatus.textContent = 'Listening… tap again when done'; };
+            recognition.onresult = function (event) {
+              var interim = '';
+              for (var i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) finalText += event.results[i][0].transcript + ' ';
+                else interim += event.results[i][0].transcript;
+              }
+              emptyEnds = 0;
+              voiceStatus.textContent = (finalText + interim).trim() || 'Listening…';
+            };
+            recognition.onend = function () {
+              listening = false;
+              if (!wantListen) {
+                recordBtn.classList.remove('recording');
+                var msg = finalText.trim();
+                if (msg) askVoice(msg, 'voice');
+                else voiceStatus.textContent = 'Ready';
+                return;
+              }
+              emptyEnds += 1;
+              if (emptyEnds >= 4 && !finalText.trim()) {
+                wantListen = false;
+                recordBtn.classList.remove('recording');
+                voiceStatus.textContent = 'Could not catch speech. Type below or try Chrome/Edge.';
+                return;
+              }
+              setTimeout(begin, 280);
+            };
+            recognition.onerror = function (ev) {
+              var err = (ev && ev.error) || '';
+              if (err === 'aborted' || err === 'no-speech') return;
+              wantListen = false;
+              listening = false;
+              recordBtn.classList.remove('recording');
+              if (err === 'not-allowed') voiceStatus.textContent = 'Microphone permission denied.';
+              else voiceStatus.textContent = 'Voice recognition error. Type your question below.';
+            };
+            recognition.start();
+          } catch (e) {
+            setTimeout(begin, 300);
+          }
+        }
+        begin();
       });
-    } else { recordBtn.disabled = true; voiceStatus.textContent = 'Voice recording is not supported in this browser. Use text below.'; }
-  }
+      else if (navigator.mediaDevices && window.MediaRecorder) {
+        var recorder = null; var chunks = [];
+        recordBtn.addEventListener('click', function () {
+          if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+            chunks = []; recorder = new MediaRecorder(stream);
+            recorder.ondataavailable = function (event) { if (event.data.size) chunks.push(event.data); };
+            recorder.onstart = function () { recordBtn.classList.add('recording'); voiceStatus.textContent = 'Recording… tap again to stop'; };
+            recorder.onstop = function () {
+              recordBtn.classList.remove('recording'); voiceStatus.textContent = 'Transcribing…';
+              stream.getTracks().forEach(function (track) { track.stop(); });
+              var blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+              fetch('/api/voice/transcribe', { method: 'POST', credentials: 'include', headers: { 'Content-Type': blob.type }, body: blob })
+                .then(function (response) { return response.json().then(function (data) { if (!response.ok) throw new Error(data.message); return data; }); })
+                .then(function (data) { if (data.text) askVoice(data.text, 'voice'); else voiceStatus.textContent = 'No speech detected — type below.'; })
+                .catch(function (error) { voiceStatus.textContent = (error.message || 'Transcription unavailable') + '. Type below.'; });
+            };
+            recorder.start();
+          }).catch(function () { voiceStatus.textContent = 'Microphone permission was denied.'; });
+        });
+      } else { recordBtn.disabled = true; voiceStatus.textContent = 'Voice recording is not supported in this browser. Use text below.'; }
+    }
+
+    // Claim PayPal order after guest checkout + login
+    try {
+      var pendingOrder = localStorage.getItem('patwago_pending_order');
+      if (pendingOrder) {
+        fetch('/api/account/claim-order', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: pendingOrder }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (j && j.ok) {
+            localStorage.removeItem('patwago_pending_order');
+            toast('Payment linked — your pass is active.');
+          }
+        }).catch(function () {});
+      }
+    } catch (e) {}
+
   var clearTranscript = document.getElementById('clearTranscriptBtn');
   if (clearTranscript && transcript) clearTranscript.addEventListener('click', function () { voiceSession = 'voice-' + Date.now(); localStorage.setItem('patwago_voice_session', voiceSession); transcript.innerHTML = '<p class="muted">New conversation started.</p>'; });
 })();

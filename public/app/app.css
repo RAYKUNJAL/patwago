@@ -14,3 +14,7 @@
 .voice-turn-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:center 18%;border:1px solid rgba(255,212,0,.55)}
 .voice-turn.assistant .voice-turn-head strong{color:#ffd400}
 @media(max-width:800px){.miss-cleo-hero-card{flex-direction:column;align-items:flex-start;text-align:left}}
+
+.access-banner{margin-top:12px;padding:10px 14px;border-radius:12px;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.28);color:#f0e6b0;font-size:14px;line-height:1.45}
+.access-banner a{color:#ffd400;font-weight:700}
+.access-banner[hidden]{display:none!important}

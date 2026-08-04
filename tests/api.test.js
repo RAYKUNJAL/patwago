@@ -140,7 +140,7 @@ test('account registration rejects short passwords server-side', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Short Password', email: 'short-password@example.com', password: 'seven77' }),
     });
-    assert.equal(response.status, 500);
+    assert.equal(response.status, 400);
     const payload = await response.json();
     assert.match(payload.message, /at least 8/i);
   });
@@ -295,7 +295,7 @@ test('real internal app pages and assets are served', async () => {
     const routes = [
       ['/app', /Your Jamaica trip dashboard/],
       ['/app/translate', /Patois Translator/],
-      ['/app/vendors', /Verified Jamaica marketplace/],
+      ['/app/vendors', /Jamaica marketplace|Live local listings/],
       ['/app/trips', /Build your Jamaica itinerary/],
       ['/app/trips/new', /Build my itinerary with AI/],
       ['/app/voice', /Miss Cleo/],

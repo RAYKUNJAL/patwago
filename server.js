@@ -534,6 +534,43 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true, data: rows });
   }
 
+  if (req.method === 'GET' && pathname === '/api/admin/payments') {
+    if (!requireAdmin(req, res)) return true;
+    const rows = await payments.listRecent({ limit: searchParams.get('limit') || 50 });
+    return sendJson(res, 200, { ok: true, data: rows });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/grant-pass') {
+    if (!requireAdmin(req, res)) return true;
+    const body = await readBody(req);
+    const email = String(body.email || '').trim().toLowerCase();
+    const plan = String(body.plan || 'day').trim();
+    if (!email) return sendJson(res, 400, { ok: false, message: 'email is required' });
+    const customer = await auth.getCustomerByEmail(email);
+    if (!customer) return sendJson(res, 404, { ok: false, message: 'Customer not found' });
+    try {
+      const pass = await auth.createPass({ customer_id: customer.id, plan, trip_days: body.trip_days });
+      return sendJson(res, 201, { ok: true, data: { customer_id: customer.id, email: customer.email, pass } });
+    } catch (error) {
+      return sendJson(res, 400, { ok: false, message: error.message });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/admin/vendor-signups/verify') {
+    if (!requireAdmin(req, res)) return true;
+    const body = await readBody(req);
+    const id = String(body.id || body.signup_id || '').trim();
+    if (!id) return sendJson(res, 400, { ok: false, message: 'id is required' });
+    const state = store.getState();
+    const signup = (state.vendor_signups || []).find((s) => s.id === id);
+    if (!signup) return sendJson(res, 404, { ok: false, message: 'Signup not found' });
+    signup.verified = true;
+    signup.status = 'verified';
+    signup.verified_at = new Date().toISOString();
+    store.saveState(state);
+    return sendJson(res, 200, { ok: true, data: signup });
+  }
+
   if (req.method === 'GET' && pathname === '/api/admin/analytics/summary') {
     if (!requireAdmin(req, res)) return true;
     return sendJson(res, 200, { ok: true, data: await analytics.summary(searchParams.get('days') || 30) });
@@ -547,12 +584,34 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && pathname === '/api/account/register') {
     if (rateLimited(res, registerLimiter, `register:${clientIp(req)}`)) return true;
     const body = await readBody(req);
-    const customer = await auth.registerCustomer(body);
-    const session = await auth.createSession({ customer_id: customer.id });
-    const trial = await auth.createPass({ customer_id: customer.id, plan: 'trial' });
-    setSessionCookie(res, session.token);
-    await analytics.record({ name: 'signup_complete', session_id: session.token, anonymous_id: body.anonymous_id, properties: { success: true } });
-    return sendJson(res, 201, { ok: true, data: { customer, session, pass: trial } });
+    try {
+      const customer = await auth.registerCustomer(body);
+      const session = await auth.createSession({ customer_id: customer.id });
+      setSessionCookie(res, session.token);
+      let trial = null;
+      try {
+        trial = await auth.createPass({ customer_id: customer.id, plan: 'trial' });
+      } catch {
+        trial = null;
+      }
+      try {
+        await analytics.record({ name: 'signup_complete', session_id: session.token, anonymous_id: body.anonymous_id, properties: { success: true } });
+      } catch { /* consent may block analytics */ }
+      const access = await auth.getAccessSummary(customer.id);
+      return sendJson(res, 201, {
+        ok: true,
+        data: {
+          customer,
+          session,
+          pass: trial,
+          access,
+          active_pass: access.active,
+          next: access.active ? '/app' : '/account/paywall',
+        },
+      });
+    } catch (error) {
+      return sendJson(res, 400, { ok: false, message: error.message || 'Registration failed' });
+    }
   }
 
   if (req.method === 'POST' && pathname === '/api/account/login') {
@@ -562,14 +621,77 @@ async function handleApi(req, res, url) {
     if (!customer) return sendJson(res, 401, { ok: false, message: 'Invalid email or password' });
     const session = await auth.createSession({ customer_id: customer.id });
     setSessionCookie(res, session.token);
-    const passes = await auth.listPasses(customer.id);
-    return sendJson(res, 200, { ok: true, data: { customer, session, passes, active_pass: await auth.hasActivePass(customer.id) } });
+    const access = await auth.getAccessSummary(customer.id);
+    return sendJson(res, 200, {
+      ok: true,
+      data: {
+        customer,
+        session,
+        passes: access.passes,
+        active_pass: access.active,
+        access,
+        next: access.active ? '/app' : '/account/paywall',
+      },
+    });
   }
 
   if (req.method === 'GET' && pathname === '/api/account/me') {
     const session = await requireCustomer(req, res, false);
     if (!session) return true;
-    return sendJson(res, 200, { ok: true, data: { customer: await auth.getCustomerById(session.customer_id), passes: await auth.listPasses(session.customer_id), active_pass: await auth.hasActivePass(session.customer_id) } });
+    const customer = await auth.getCustomerById(session.customer_id);
+    const access = await auth.getAccessSummary(session.customer_id);
+    return sendJson(res, 200, {
+      ok: true,
+      data: {
+        customer,
+        passes: access.passes,
+        active_pass: access.active,
+        access,
+      },
+    });
+  }
+
+  if (req.method === 'POST' && pathname === '/api/account/claim-order') {
+    const session = await requireCustomer(req, res, false);
+    if (!session) return true;
+    const body = await readBody(req);
+    const orderId = String(body.order_id || body.orderId || body.token || '').trim();
+    if (!orderId) return sendJson(res, 400, { ok: false, message: 'order_id is required' });
+    try {
+      let known = await payments.getByOrderId(orderId);
+      // Capture if not completed yet
+      if (!known || known.status !== 'completed') {
+        try {
+          const payment = await paypalService().captureOrder(orderId);
+          await payments.recordCapture(payment, { customer_id: session.customer_id });
+          known = await payments.getByOrderId(orderId);
+        } catch (error) {
+          // If already captured, fall through to attach
+          known = await payments.getByOrderId(orderId);
+          if (!known || known.status !== 'completed') {
+            return sendJson(res, 409, { ok: false, message: error.message || 'Could not capture PayPal order' });
+          }
+        }
+      }
+      if (known.customer_id && known.customer_id !== session.customer_id) {
+        return sendJson(res, 409, { ok: false, message: 'This payment is already linked to another account' });
+      }
+      await payments.attachCustomerToOrder(orderId, session.customer_id);
+      const plan = known.plan || 'day';
+      // Avoid duplicate paid pass if one was already created for this capture
+      const existingPasses = await auth.listPasses(session.customer_id);
+      let pass = existingPasses.find((p) => p.plan === plan && new Date(p.expires_at).getTime() > Date.now()) || null;
+      if (!pass) {
+        pass = await auth.createPass({ customer_id: session.customer_id, plan });
+      }
+      const access = await auth.getAccessSummary(session.customer_id);
+      return sendJson(res, 200, {
+        ok: true,
+        data: { order_id: orderId, plan, pass, access, message: 'Pass activated on your account' },
+      });
+    } catch (error) {
+      return sendJson(res, 502, { ok: false, message: error.message || 'Claim failed' });
+    }
   }
 
   if (req.method === 'POST' && pathname === '/api/account/logout') {
@@ -1213,6 +1335,19 @@ async function handleAppPages(req, res, url) {
   else if (pathname === '/account' || pathname === '/account/onboarding') html = appPages.accountPage('onboarding');
   else if (pathname === '/account/login') html = appPages.accountPage('auth');
   else if (pathname === '/account/paywall') html = appPages.accountPage('trial');
+  else if (pathname === '/support' || pathname === '/app/support') {
+    // Login required so claim-order works; pass NOT required (paid-but-locked users).
+    const session = await customerSession(req);
+    if (!session) {
+      res.writeHead(302, {
+        Location: `/account/login?next=${encodeURIComponent(pathname)}`,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return true;
+    }
+    return sendHtml(res, 200, appPages.supportPage());
+  }
   else if (pathname === '/app' || pathname.startsWith('/app/')) {
     const session = await customerSession(req);
     if (!session) {
