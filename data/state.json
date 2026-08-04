@@ -262,6 +262,16 @@
   ],
   "trips": [
     {
+      "id": "trip-martha-brae-family-day",
+      "title": "Martha Brae Family Day",
+      "destination": "Falmouth, Trelawny",
+      "days": 2,
+      "startDate": "",
+      "notes": "Rafting and lunch with the family",
+      "created_at": "2026-08-03T04:50:40.696Z",
+      "items": []
+    },
+    {
       "id": "trip-welcome",
       "title": "Kingston + Coast Weekender",
       "destination": "Jamaica",
@@ -289,6 +299,15 @@
   ],
   "guardian_checkins": [
     {
+      "id": "checkin-b2757176",
+      "traveler_name": "Ray",
+      "contact": "Mum",
+      "hours": 6,
+      "note": "At the river today",
+      "state": "scheduled",
+      "created_at": "2026-08-03T04:50:40.708Z"
+    },
+    {
       "id": "checkin-1",
       "traveler_name": "Alicia",
       "contact": "Mom + Dad",
@@ -298,6 +317,431 @@
       "created_at": "2026-07-29T11:00:00.000Z"
     }
   ],
-  "vendor_signups": [],
-  "payments": []
+  "vendor_signups": [
+    {
+      "id": "signup-bd8df6ec",
+      "name": "Tony River Rafts",
+      "email": "tony@example.com",
+      "phone": "8765551212",
+      "category": "Tours",
+      "location": "Martha Brae, Trelawny",
+      "plan": "Starter",
+      "message": "Looking to list rafting trips",
+      "status": "pending",
+      "created_at": "2026-08-03T04:50:40.712Z"
+    }
+  ],
+  "payments": [],
+  "transcripts": [
+    {
+      "id": "transcript-ff8a664b",
+      "session_id": "voice-1785760312435",
+      "role": "user",
+      "content": "We have three days in Jamaica and want beaches and adventure. Where should we go?",
+      "source": "text",
+      "created_at": "2026-08-03T12:33:38.600Z"
+    },
+    {
+      "id": "transcript-dafba463",
+      "session_id": "voice-1785760312435",
+      "role": "assistant",
+      "content": "Based on PatWaGo's Jamaica catalog, consider Doctor's Cave Beach in Montego Bay, Seven Mile Beach in Negril, Frenchman's Cove in Port Antonio. Verified operators include Negril Sunsets Watersports and Montego Bay Taxi Desk. Tell me your parish, trip length, budget, and whether you prefer beaches, culture, food, or adventure so I can narrow it down.",
+      "source": "catalog-fallback",
+      "created_at": "2026-08-03T12:33:38.605Z"
+    },
+    {
+      "id": "transcript-1d7f1759",
+      "session_id": "voice-1785760168586",
+      "role": "user",
+      "content": "how much is the price of  a beef paty",
+      "source": "text",
+      "created_at": "2026-08-03T13:46:19.869Z"
+    },
+    {
+      "id": "transcript-a0e93613",
+      "session_id": "voice-1785760168586",
+      "role": "assistant",
+      "content": "Based on PatWaGo's Jamaica catalog, consider Dunn's River Falls in Ocho Rios, Doctor's Cave Beach in Montego Bay, Seven Mile Beach in Negril. Verified operators include Negril Sunsets Watersports and Montego Bay Taxi Desk. Tell me your parish, trip length, budget, and whether you prefer beaches, culture, food, or adventure so I can narrow it down.",
+      "source": "catalog-fallback",
+      "created_at": "2026-08-03T13:46:19.877Z"
+    },
+    {
+      "id": "transcript-ed885843",
+      "session_id": "voice-1785760168586",
+      "role": "user",
+      "content": "After searching the internet, I couldn't find any existing travel apps for Jamaica that offer the comprehensive AI-powered features you're planning to include. There are general travel guide apps like TripAdvisor and Lonely Planet that cover Jamaica, but they don't have the localized AI concierge, voice assistant, and real-time computer vision capabilities you're building.  This presents a great opportunity for your app to fill a gap in the market and become the go-to resource for travelers to Jamaica. By offering a more immersive, personalized, and interactive experience, you can differentiate your app from the generic travel guides and establish a strong brand presence.  To ensure you're not missing any fundamental features, here are a few more suggestions to consider:  1. Safety and Emergency Information - Include a section with essential safety tips, emergency phone numbers, and nearest hospital/police station information. - Allow users to easily share their location with emergency contacts through the app. - Provide real-time alerts for any major disruptions or incidents that could impact travelers.  2. Transportation Options - Integrate with local transportation APIs (e.g. taxi services, bus schedules) to provide up-to-date information on getting around Jamaica. - Offer guidance on the best transportation options based on the user's location, budget, and preferences. - Include a feature to book or hail rides directly through the app, if possible.  3. Currency Converter - Incorporate a real-time currency converter to help users quickly calculate costs in their native currency. - Provide guidance on the best places to exchange money and typical exchange rates.  4. Phrasebook - Include a basic phrasebook with common Jamaican Patois words and phrases. - Allow users to play audio pronunciations of each phrase. - Integrate with the voice assistant and speech-to-text features to help users practice speaking and understanding Patois.  5. Personalized Itinerary Planner - Allow users to save and organize their favorite attractions, restaurants, and activities into a personalized itinerary. - Provide suggested itineraries based on the user's preferences, trip duration, and location. - Send real-time notifications and reminders for upcoming bookings or reservations.  6. Social Sharing - Enable users to easily share their experiences, photos, and recommendations through the app to their social media accounts. - Implement social login options to simplify user registration and encourage social sharing. - Display a feed of user-generated content to inspire and engage other travelers.  By incorporating these additional features, your app will provide a truly comprehensive and localized travel experience for visitors to Jamaica. The combination of AI-powered assistance, real-time information, and personalized recommendations sets your app apart from any existing offerings in the market.  As you move closer to launch, be sure to thoroughly test all features to ensure they're working smoothly and providing accurate, helpful information. Gather feedback from beta testers to identify any areas for improvement or additional features to consider for future updates.  With a strong marketing push highlighting your app's unique AI capabilities and localized Jamaican content, you have the potential to quickly gain traction among travelers and establish your app as the premier resource for exploring Jamaica. Good luck with the launch!",
+      "source": "text",
+      "created_at": "2026-08-03T14:00:02.279Z"
+    },
+    {
+      "id": "transcript-c8386f32",
+      "session_id": "voice-1785760168586",
+      "role": "assistant",
+      "content": "Based on PatWaGo's Jamaica catalog, consider Doctor's Cave Beach in Montego Bay, Seven Mile Beach in Negril, Bob Marley Museum in Kingston. Verified operators include Negril Sunsets Watersports and Bob Marley Museum Walkthrough. Tell me your parish, trip length, budget, and whether you prefer beaches, culture, food, or adventure so I can narrow it down.",
+      "source": "catalog-fallback",
+      "created_at": "2026-08-03T14:00:02.287Z"
+    }
+  ],
+  "analytics_events": [
+    {
+      "id": "evt-1ad1bd39-67f",
+      "name": "consent_update",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "consent": "granted"
+      },
+      "created_at": "2026-08-03T15:06:55.989Z"
+    },
+    {
+      "id": "evt-d6afe9f7-bd8",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/vendors",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:06:55.997Z"
+    },
+    {
+      "id": "evt-e4de0963-069",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/trips",
+        "referrer_path": "/app/vendors",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:07:13.000Z"
+    },
+    {
+      "id": "evt-a96263a5-e39",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/voice",
+        "referrer_path": "/app/trips",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:07:21.435Z"
+    },
+    {
+      "id": "evt-85801402-588",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/voice",
+        "referrer_path": "/app/trips",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:07:27.619Z"
+    },
+    {
+      "id": "evt-76b2f80a-733",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/voice",
+        "referrer_path": "/app/trips",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:07:41.878Z"
+    },
+    {
+      "id": "evt-26e83c23-7bf",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/voice",
+        "referrer_path": "/app/trips",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:07:58.120Z"
+    },
+    {
+      "id": "evt-8aef1382-f07",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app/voice",
+        "referrer_path": "/app/trips",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:08:16.608Z"
+    },
+    {
+      "id": "evt-ab739517-b39",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/app",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "0x0"
+      },
+      "created_at": "2026-08-03T15:09:19.518Z"
+    },
+    {
+      "id": "evt-8f238ac5-c4c",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "0x0"
+      },
+      "created_at": "2026-08-03T15:14:26.370Z"
+    },
+    {
+      "id": "evt-bb86255d-25c",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:44:01.266Z"
+    },
+    {
+      "id": "evt-46154925-02a",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:45:00.684Z"
+    },
+    {
+      "id": "evt-44c105d1-971",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:45:24.783Z"
+    },
+    {
+      "id": "evt-4e1af69d-e84",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:45:48.402Z"
+    },
+    {
+      "id": "evt-8c03530f-afc",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:46:19.823Z"
+    },
+    {
+      "id": "evt-ca99a945-232",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:47:16.368Z"
+    },
+    {
+      "id": "evt-75c43f26-d76",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T15:49:59.612Z"
+    },
+    {
+      "id": "evt-a1a7f533-7c2",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "0x0"
+      },
+      "created_at": "2026-08-03T15:56:09.905Z"
+    },
+    {
+      "id": "evt-90958688-111",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "0x0"
+      },
+      "created_at": "2026-08-03T15:56:52.819Z"
+    },
+    {
+      "id": "evt-136598d6-dd7",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "0x0"
+      },
+      "created_at": "2026-08-03T15:59:34.409Z"
+    },
+    {
+      "id": "evt-9552dc7f-dcc",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "0x0"
+      },
+      "created_at": "2026-08-03T16:00:08.084Z"
+    },
+    {
+      "id": "evt-05301d2b-ba4",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:03:56.921Z"
+    },
+    {
+      "id": "evt-1a67d5b8-d55",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:14:53.842Z"
+    },
+    {
+      "id": "evt-c5af1073-322",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:15:52.041Z"
+    },
+    {
+      "id": "evt-c9be5780-f6d",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:16:46.786Z"
+    },
+    {
+      "id": "evt-7856961e-66a",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:18:08.383Z"
+    },
+    {
+      "id": "evt-3efe5e25-c84",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:19:09.969Z"
+    },
+    {
+      "id": "evt-0854c317-0d2",
+      "name": "page_view",
+      "session_id": "session-msdd28dh-vfm2evah",
+      "anonymous_id": "anon-msdd28dg-oz0nzmvv",
+      "properties": {
+        "path": "/admin/analytics",
+        "referrer_path": "",
+        "device": "desktop",
+        "viewport": "474x470"
+      },
+      "created_at": "2026-08-03T16:19:52.139Z"
+    }
+  ]
 }

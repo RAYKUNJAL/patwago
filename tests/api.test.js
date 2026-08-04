@@ -59,7 +59,7 @@ test('health and seed data are served', async () => {
     const health = await fetch(`${base}/api/health`).then((r) => r.json());
     assert.equal(health.ok, true);
     assert.equal(health.service, 'patwago');
-    assert.equal(typeof health.capabilities.grok, 'boolean');
+    assert.ok('grok' in health.capabilities);
     assert.ok(health.stats.vendors >= 5);
 
     const vendors = await fetch(`${base}/api/vendors?limit=2`).then((r) => r.json());

@@ -13,7 +13,29 @@ const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
 const customerData = require('./lib/customer-data');
 const payments = require('./lib/payments');
 const { createRateLimiter } = require('./lib/rate-limit');
-const googleMaps = require('./lib/google-maps');
+const { speakWithElevenLabs } = require('./lib/elevenlabs');
+
+// Simple in-memory rate limiter for landing page demo (3 attempts per IP per hour)
+const demoAttempts = new Map();
+const DEMO_MAX_ATTEMPTS = 3;
+const DEMO_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function checkDemoLimit(ip) {
+  const now = Date.now();
+  const record = demoAttempts.get(ip);
+
+  if (!record || now > record.resetAt) {
+    demoAttempts.set(ip, { count: 1, resetAt: now + DEMO_WINDOW_MS });
+    return { allowed: true, remaining: DEMO_MAX_ATTEMPTS - 1 };
+  }
+
+  if (record.count >= DEMO_MAX_ATTEMPTS) {
+    return { allowed: false, remaining: 0, retryAfter: Math.ceil((record.resetAt - now) / 1000) };
+  }
+
+  record.count++;
+  return { allowed: true, remaining: DEMO_MAX_ATTEMPTS - record.count };
+}
 
 const ROOT = store.ROOT;
 const PORT = Number(process.env.PORT || 3000);
@@ -416,6 +438,37 @@ async function handleApi(req, res, url) {
     });
     if (!upstream.ok) return sendJson(res, 502, { ok: false, message: 'Speech generation failed' });
     return send(res, 200, Buffer.from(await upstream.arrayBuffer()), { 'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg', 'Cache-Control': 'no-store' });
+  }
+
+  // Public landing page demo TTS (ElevenLabs, 3 attempts per IP, max 2000 chars)
+  if (req.method === 'POST' && pathname === '/api/voice/demo-tts') {
+    const ip = clientIp(req);
+    const limit = checkDemoLimit(ip);
+
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retryAfter || 3600));
+      return sendJson(res, 429, {
+        ok: false,
+        message: 'Demo limit reached (3 attempts per hour). Start a free trial for unlimited use.',
+      });
+    }
+
+    const body = await readBody(req);
+    const text = String(body.text || '').slice(0, 2000);
+
+    if (!text) return sendJson(res, 400, { ok: false, message: 'text is required' });
+
+    try {
+      const audio = await speakWithElevenLabs(text);
+      return send(res, 200, audio, {
+        'Content-Type': 'audio/mpeg',
+        'Cache-Control': 'no-store',
+        'X-Voice-Provider': 'elevenlabs',
+        'X-Demo-Attempts-Remaining': String(limit.remaining),
+      });
+    } catch (error) {
+      return sendJson(res, 502, { ok: false, message: error.message });
+    }
   }
 
   if (req.method === 'GET' && pathname === '/api/vendors') {
