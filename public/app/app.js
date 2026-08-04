@@ -177,7 +177,7 @@
       lastProfile.days = Number(lastProfile.days);
       lastProfile.interests = data.getAll('interests');
       aiItineraryResult.hidden = false;
-      aiItineraryResult.innerHTML = '<div class="ai-loading glass">PatWaGo AI is matching places, regions, and verified vendors…</div>';
+      aiItineraryResult.innerHTML = '<div class="ai-loading glass">Miss Cleo is matching places, regions, and verified vendors…</div>';
       jsonFetch('/api/ai/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lastProfile) })
         .then(function (payload) {
           lastItinerary = payload.data;
@@ -209,11 +209,23 @@
     if (transcript.querySelector('.muted')) transcript.innerHTML = '';
     var turn = document.createElement('div');
     turn.className = 'voice-turn ' + role;
+    var head = document.createElement('div');
+    head.className = 'voice-turn-head';
+    if (role === 'assistant') {
+      var img = document.createElement('img');
+      img.className = 'voice-turn-avatar';
+      img.src = '/images/miss-cleo-avatar-sm.png';
+      img.alt = 'Miss Cleo';
+      img.width = 28;
+      img.height = 28;
+      head.appendChild(img);
+    }
     var label = document.createElement('strong');
     label.textContent = role === 'assistant' ? 'Miss Cleo' : 'You';
+    head.appendChild(label);
     var text = document.createElement('p');
     text.textContent = content;
-    turn.appendChild(label); turn.appendChild(text); transcript.appendChild(turn);
+    turn.appendChild(head); turn.appendChild(text); transcript.appendChild(turn);
     transcript.scrollTop = transcript.scrollHeight;
   }
   function speak(text) {

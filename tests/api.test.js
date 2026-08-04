@@ -263,7 +263,7 @@ test('real internal app pages and assets are served', async () => {
       ['/app/vendors', /Verified Jamaica marketplace/],
       ['/app/trips', /Build your Jamaica itinerary/],
       ['/app/trips/new', /Build my itinerary with AI/],
-      ['/app/voice', /Full transcript/],
+      ['/app/voice', /Miss Cleo/],
       ['/app/guardian', /Travel safety check-ins/],
       ['/app/profile', /Pass & account/],
     ];
@@ -365,7 +365,7 @@ test('AI itinerary is catalog-grounded, saved as a trip, and concierge transcrip
     assert.match(await plannerPage.text(), /Build my itinerary with AI/);
     const voicePage = await fetch(`${base}/app/voice`);
     assert.equal(voicePage.status, 200);
-    assert.match(await voicePage.text(), /Full transcript/);
+    assert.match(await voicePage.text(), /Chat with Miss Cleo|Miss Cleo/);
 
     const generated = await fetch(`${base}/api/ai/itinerary`, {
       method: 'POST',
