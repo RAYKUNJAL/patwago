@@ -1466,12 +1466,15 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
     }
 
     function playURL(url){
-      stopCurrentAudio();
-      var a=new Audio(url);
-      currentAudio=a;
-      a.play().catch(function(e){console.warn('[PatWaGo] audio play blocked:',e)});
-      a.onended=function(){currentAudio=null};
-    }
+          stopCurrentAudio();
+          var a=new Audio(url);
+          a.playbackRate=1.0;
+          a.defaultPlaybackRate=1.0;
+          a.preservesPitch=true;
+          currentAudio=a;
+          a.play().catch(function(e){console.warn('[PatWaGo] audio play blocked:',e)});
+          a.onended=function(){currentAudio=null};
+        }
 
     // Wire up speaker buttons (event delegation)
     chat.addEventListener('click',function(e){
