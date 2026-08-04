@@ -1138,8 +1138,9 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
     <div class="foot-col">
       <h4>Legal</h4>
       <a href="#privacy" data-legal="privacy">Privacy</a>
-      <a href="#terms" data-legal="terms">Terms</a>
-      <a href="#cookies" data-legal="cookies">Cookies</a>
+            <a href="#terms" data-legal="terms">Terms</a>
+            <a href="#cookies" data-legal="cookies">Cookies</a>
+            <a href="#eu-consent" data-legal="eu-consent">EU Data Consent</a>
     </div>
     <div class="foot-col">
       <h4>Partners</h4>
@@ -2495,6 +2496,36 @@ Vendors: <a href="mailto:vendors@patwago.com">vendors@patwago.com</a><br>
 Support: <a href="mailto:bookings@patwago.com">bookings@patwago.com</a><br>
 Made in Jamaica 🇯🇲</p>
 `
+    },
+
+    'eu-consent': {
+      eyebrow: 'Compliance · SGI / GDPR / ePrivacy',
+      title: 'EU Data Consent Notice',
+      updated: 'Last updated: 4 August 2026',
+      toc: ['Why we ask','Categories','Generation audit log','Your choices','Contact'],
+      body: `
+<h3 id="eu-why">Why we ask</h3>
+<p>If you are in the EU/EEA/UK (or we otherwise apply European-style rules), we need a clear yes before processing personal data for non-essential features, and before sending your prompts to AI providers. PatWaGo uses a <strong>hard consent gate</strong> — AI, cloud voice, and analytics do not run until you accept the relevant categories.</p>
+
+<h3 id="eu-cats">Categories</h3>
+<ul>
+<li><strong>Essential</strong> — security, login session, load balancing. Always on.</li>
+<li><strong>AI processing</strong> — translator, Miss Cleo / concierge, voice, itinerary builder. Prompts and short context may be sent to our model providers.</li>
+<li><strong>Analytics</strong> — privacy-safe product usage counts. No payment card data, no SOS message bodies.</li>
+<li><strong>Location</strong> — only when you use near-me or safety check-in features.</li>
+<li><strong>Marketing</strong> — optional product updates you can refuse.</li>
+</ul>
+
+<h3 id="eu-log">Generation audit log</h3>
+<p>For AI features you enable, we record a timestamped audit entry: UTC time, feature/route, model/provider, prompt hash, output hash, success/failure, and consent version. We store short previews and hashes — not full payment or SOS contents. This exists so we can prove what the system produced in a regulatory or security audit. It is not sold.</p>
+
+<h3 id="eu-choices">Your choices</h3>
+<p>You can accept all, accept only some categories, or continue with essential only (AI features stay off). Withdraw by clearing site data for patwago.com or emailing us. When we change categories, we bump the policy version and ask again.</p>
+
+<h3 id="eu-contact">Contact</h3>
+<p>Privacy: <a href="mailto:privacy@patwago.com">privacy@patwago.com</a><br>
+Operator: R&amp;R Digital · Kingston, Jamaica</p>
+`
     }
   };
 
@@ -2568,6 +2599,8 @@ Made in Jamaica 🇯🇲</p>
   openFromHash();
 })();
 </script>
+
+<script src="/app/consent-gate.js" data-app="patwago" data-policy-version="sgi-eu-v1"></script>
 
 </body>
 </html>

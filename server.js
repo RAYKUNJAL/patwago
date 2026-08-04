@@ -15,6 +15,57 @@ const payments = require('./lib/payments');
 const { createRateLimiter } = require('./lib/rate-limit');
 const googleMaps = require('./lib/google-maps');
 const { speakWithElevenLabs } = require('./lib/elevenlabs');
+const { requireConsent: requireConsentRaw, readConsent } = require('./lib/consent');
+const generationLog = require('./lib/generation-log');
+
+function requireConsent(req, res, categories = ['ai_processing']) {
+  // Existing suite coverage stays green; consent-audit.test.js sets CONSENT_ENFORCE=1.
+  if (process.env.NODE_ENV === 'test' && process.env.CONSENT_ENFORCE !== '1') {
+    req.consent = {
+      version: 'test',
+      accepted_at: new Date().toISOString(),
+      categories: {
+        essential: true,
+        ai_processing: true,
+        analytics: true,
+        location: true,
+        marketing: true,
+      },
+      policy_version: 'test',
+      source: 'test_bypass',
+      anonymous_id: 'test',
+    };
+    return true;
+  }
+  return requireConsentRaw(req, res, categories, sendJson);
+}
+
+function consentAuditFields(req) {
+  const c = req.consent || readConsent(req) || {};
+  const categories = c.categories
+    ? Object.keys(c.categories).filter((key) => c.categories[key])
+    : [];
+  return {
+    consent_version: c.version || c.policy_version || null,
+    consent_categories: categories,
+    anonymous_id: c.anonymous_id || null,
+    ip: clientIp(req),
+  };
+}
+
+async function logGeneration(req, fields) {
+  try {
+    return await generationLog.recordGeneration({
+      app: 'patwago',
+      ...consentAuditFields(req),
+      ...fields,
+    });
+  } catch (error) {
+    console.warn('[generation-log]', error.message);
+    return { id: null, created_at: new Date().toISOString() };
+  }
+}
+
 // Landing demo TTS limits (per IP). Only successful audio responses count.
 const demoAttempts = new Map();
 const DEMO_MAX_ATTEMPTS = Number(process.env.DEMO_TTS_MAX_ATTEMPTS || 25);
@@ -461,6 +512,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/analytics/events') {
+    if (!requireConsent(req, res, ['analytics'])) return true;
     const body = await readBody(req);
     try {
       await analytics.record(body);
@@ -468,6 +520,18 @@ async function handleApi(req, res, url) {
     } catch (error) {
       return sendJson(res, 400, { ok: false, message: error.message });
     }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/admin/generation-log') {
+    if (!requireAdmin(req, res)) return true;
+    const rows = await generationLog.listGenerations({
+      limit: searchParams.get('limit') || 50,
+      since: searchParams.get('since') || undefined,
+      feature: searchParams.get('feature') || undefined,
+      app: searchParams.get('app') || 'patwago',
+      customer_id: searchParams.get('customer_id') || undefined,
+    });
+    return sendJson(res, 200, { ok: true, data: rows });
   }
 
   if (req.method === 'GET' && pathname === '/api/admin/analytics/summary') {
@@ -516,61 +580,124 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/voice/transcribe') {
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
+    const started = Date.now();
     const whisperUrl = process.env.WHISPER_URL || '';
     if (!whisperUrl) return sendJson(res, 503, { ok: false, message: 'Self-hosted transcription is not configured' });
     const audio = await readRawBody(req);
     if (!audio.length) return sendJson(res, 400, { ok: false, message: 'Audio is required' });
-    const form = multipartAudio(audio, req.headers['content-type']);
-    const upstream = await fetch(`${whisperUrl.replace(/\/$/, '')}/v1/audio/transcriptions`, {
-      method: 'POST', headers: { 'Content-Type': form.contentType }, body: form.body, signal: AbortSignal.timeout(120_000),
-    });
-    const payload = await upstream.json();
-    if (!upstream.ok) return sendJson(res, 502, { ok: false, message: payload.detail || payload.error?.message || 'Transcription failed' });
-    return sendJson(res, 200, { ok: true, text: payload.text || '', data: payload });
+    try {
+      const form = multipartAudio(audio, req.headers['content-type']);
+      const upstream = await fetch(`${whisperUrl.replace(/\/$/, '')}/v1/audio/transcriptions`, {
+        method: 'POST', headers: { 'Content-Type': form.contentType }, body: form.body, signal: AbortSignal.timeout(120_000),
+      });
+      const payload = await upstream.json();
+      if (!upstream.ok) {
+        await logGeneration(req, {
+          route: pathname, feature: 'stt', provider: 'whisper', success: false,
+          error: payload.detail || payload.error?.message || 'Transcription failed', latency_ms: Date.now() - started,
+        });
+        return sendJson(res, 502, { ok: false, message: payload.detail || payload.error?.message || 'Transcription failed' });
+      }
+      const text = payload.text || '';
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'stt', provider: 'whisper', success: true,
+        output: text, latency_ms: Date.now() - started,
+      });
+      return sendJson(res, 200, { ok: true, text, data: payload, generation_id: log.id });
+    } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'stt', provider: 'whisper', success: false,
+        error: error.message, latency_ms: Date.now() - started,
+      });
+      throw error;
+    }
   }
 
   if (req.method === 'POST' && pathname === '/api/voice/speech') {
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
     const body = await readBody(req);
     const text = String(body.text || '').trim().slice(0, 15000);
     if (!text) return sendJson(res, 400, { ok: false, message: 'text is required' });
+    const started = Date.now();
 
     if (process.env.XAI_API_KEY) {
-      const upstream = await fetch('https://api.x.ai/v1/tts', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${process.env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          voice_id: process.env.XAI_VOICE_ID || 'castor',
-          language: 'en',
-          speed: Number(process.env.XAI_VOICE_SPEED || 0.96),
-          text_normalization: true,
-        }),
-        signal: AbortSignal.timeout(120_000),
-      });
-      if (!upstream.ok) {
-        const detail = await upstream.text();
-        return sendJson(res, 502, { ok: false, message: `xAI speech failed: ${detail.slice(0, 400)}` });
+      try {
+        const upstream = await fetch('https://api.x.ai/v1/tts', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${process.env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            voice_id: process.env.XAI_VOICE_ID || 'castor',
+            language: 'en',
+            speed: Number(process.env.XAI_VOICE_SPEED || 0.96),
+            text_normalization: true,
+          }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!upstream.ok) {
+          const detail = await upstream.text();
+          await logGeneration(req, {
+            route: pathname, feature: 'tts', provider: 'xai', prompt: text, success: false,
+            error: detail.slice(0, 400), latency_ms: Date.now() - started,
+          });
+          return sendJson(res, 502, { ok: false, message: `xAI speech failed: ${detail.slice(0, 400)}` });
+        }
+        const log = await logGeneration(req, {
+          route: pathname, feature: 'tts', provider: 'xai', model: process.env.XAI_VOICE_ID || 'castor',
+          prompt: text, success: true, latency_ms: Date.now() - started,
+        });
+        return send(res, 200, Buffer.from(await upstream.arrayBuffer()), {
+          'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
+          'Cache-Control': 'no-store',
+          'X-Voice-Provider': 'xai',
+          'X-Generation-Id': log.id || '',
+        });
+      } catch (error) {
+        await logGeneration(req, {
+          route: pathname, feature: 'tts', provider: 'xai', prompt: text, success: false,
+          error: error.message, latency_ms: Date.now() - started,
+        });
+        throw error;
       }
-      return send(res, 200, Buffer.from(await upstream.arrayBuffer()), {
-        'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
-        'Cache-Control': 'no-store',
-        'X-Voice-Provider': 'xai',
-      });
     }
 
     const ttsUrl = process.env.TTS_BASE_URL || '';
     if (!ttsUrl) return sendJson(res, 503, { ok: false, message: 'Expressive voice is not configured' });
-    const upstream = await fetch(`${ttsUrl.replace(/\/$/, '')}/v1/audio/speech`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: process.env.TTS_MODEL || 'chatterbox', voice: process.env.TTS_VOICE || 'jamaican-concierge', input: text, response_format: 'mp3' }),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!upstream.ok) return sendJson(res, 502, { ok: false, message: 'Speech generation failed' });
-    return send(res, 200, Buffer.from(await upstream.arrayBuffer()), { 'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg', 'Cache-Control': 'no-store' });
+    try {
+      const upstream = await fetch(`${ttsUrl.replace(/\/$/, '')}/v1/audio/speech`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: process.env.TTS_MODEL || 'chatterbox', voice: process.env.TTS_VOICE || 'jamaican-concierge', input: text, response_format: 'mp3' }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (!upstream.ok) {
+        await logGeneration(req, {
+          route: pathname, feature: 'tts', provider: 'self_hosted', prompt: text, success: false,
+          error: 'Speech generation failed', latency_ms: Date.now() - started,
+        });
+        return sendJson(res, 502, { ok: false, message: 'Speech generation failed' });
+      }
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'tts', provider: 'self_hosted', prompt: text, success: true,
+        latency_ms: Date.now() - started,
+      });
+      return send(res, 200, Buffer.from(await upstream.arrayBuffer()), {
+        'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg',
+        'Cache-Control': 'no-store',
+        'X-Generation-Id': log.id || '',
+      });
+    } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'tts', provider: 'self_hosted', prompt: text, success: false,
+        error: error.message, latency_ms: Date.now() - started,
+      });
+      throw error;
+    }
   }
 
   // Public landing page demo TTS (ElevenLabs). Only successful audio counts against limit.
   if (req.method === 'POST' && pathname === '/api/voice/demo-tts') {
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
     const ip = clientIp(req);
     const limit = getDemoLimitState(ip);
 
@@ -588,17 +715,28 @@ async function handleApi(req, res, url) {
     const text = String(body.text || '').slice(0, 2000);
 
     if (!text) return sendJson(res, 400, { ok: false, message: 'text is required' });
+    const started = Date.now();
 
     try {
       const audio = await speakWithElevenLabs(text);
       const remaining = consumeDemoAttempt(ip, limit);
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'demo_tts', provider: 'elevenlabs',
+        model: process.env.ELEVENLABS_VOICE_ID || 'tanty-spice',
+        prompt: text, success: true, latency_ms: Date.now() - started,
+      });
       return send(res, 200, audio, {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'no-store',
         'X-Voice-Provider': 'elevenlabs',
         'X-Demo-Attempts-Remaining': String(remaining),
+        'X-Generation-Id': log.id || '',
       });
     } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'demo_tts', provider: 'elevenlabs', prompt: text,
+        success: false, error: error.message, latency_ms: Date.now() - started,
+      });
       return sendJson(res, 502, { ok: false, message: error.message });
     }
   }
@@ -711,13 +849,25 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && pathname === '/api/translate') {
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
     const body = await readBody(req);
     const text = String(body.text || '').trim();
     if (!text) return sendJson(res, 400, { ok: false, message: 'text is required' });
+    const started = Date.now();
     try {
       const result = await translator.translateWithGemini(text, body.from || 'en', body.to || 'patois');
-      return sendJson(res, 200, { ok: true, data: result });
+      const out = result?.translation || result?.text || JSON.stringify(result);
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'translate', provider: result?.source || 'gemini',
+        model: result?.model || process.env.GEMINI_MODEL || 'gemini',
+        prompt: text, output: out, success: true, latency_ms: Date.now() - started,
+      });
+      return sendJson(res, 200, { ok: true, data: result, generation_id: log.id });
     } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'translate', provider: 'gemini', prompt: text,
+        success: false, error: error.message, latency_ms: Date.now() - started,
+      });
       return sendJson(res, 503, {
         ok: false,
         message: `AI translation unavailable: ${error.message}`,
@@ -735,9 +885,27 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && pathname === '/api/ai/itinerary') {
     const session = await requireCustomer(req, res, true);
     if (!session) return true;
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
     const body = await readBody(req);
-    const itinerary = await aiAgent.generateItinerary(body);
-    return sendJson(res, 200, { ok: true, data: itinerary });
+    const started = Date.now();
+    try {
+      const itinerary = await aiAgent.generateItinerary(body);
+      const out = itinerary?.overview || itinerary?.title || JSON.stringify(itinerary).slice(0, 500);
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'itinerary', provider: itinerary?.source || 'ai',
+        model: itinerary?.model || process.env.XAI_MODEL || 'grok',
+        prompt: JSON.stringify(body).slice(0, 2000), output: out, success: true,
+        latency_ms: Date.now() - started, customer_id: session.customer_id,
+      });
+      return sendJson(res, 200, { ok: true, data: itinerary, generation_id: log.id });
+    } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'itinerary', success: false, error: error.message,
+        latency_ms: Date.now() - started, customer_id: session.customer_id,
+        prompt: JSON.stringify(body || {}).slice(0, 500),
+      });
+      throw error;
+    }
   }
 
   if (req.method === 'POST' && pathname === '/api/ai/itinerary/save') {
@@ -751,6 +919,7 @@ async function handleApi(req, res, url) {
 
   // Public landing-page AI demo (no login). Answers traveler questions, rate-limited per IP.
   if (req.method === 'POST' && pathname === '/api/demo/concierge') {
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
     const ip = clientIp(req);
     const limit = getDemoLimitState(ip);
     // Share the demo budget with TTS so free traffic can't spam Grok forever.
@@ -765,11 +934,18 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const message = String(body.message || body.text || body.q || '').trim().slice(0, 500);
     if (!message) return sendJson(res, 400, { ok: false, message: 'message is required' });
+    const started = Date.now();
     try {
       const answer = await aiAgent.conciergeReply(message, [], { demo: true, spoken: true });
       const reply = String(answer.reply || '').trim().slice(0, 700);
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'demo_concierge',
+        provider: answer.source || 'ai', model: answer.model || process.env.XAI_MODEL || 'grok',
+        prompt: message, output: reply, success: true, latency_ms: Date.now() - started,
+      });
       return sendJson(res, 200, {
         ok: true,
+        generation_id: log.id,
         data: {
           question: message,
           reply,
@@ -778,6 +954,10 @@ async function handleApi(req, res, url) {
         },
       });
     } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'demo_concierge', prompt: message,
+        success: false, error: error.message, latency_ms: Date.now() - started,
+      });
       return sendJson(res, 502, { ok: false, message: error.message || 'Concierge unavailable' });
     }
   }
@@ -785,13 +965,30 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && pathname === '/api/ai/concierge') {
     const session = await requireCustomer(req, res, true);
     if (!session) return true;
+    if (!requireConsent(req, res, ['ai_processing'])) return true;
     const body = await readBody(req);
     const sessionId = String(body.session_id || 'default').slice(0, 120);
-    const userTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'user', content: body.message, source: body.source || 'text' });
-    const history = (await customerData.listTranscripts(session.customer_id,sessionId)).slice(-9);
-    const answer = await aiAgent.conciergeReply(body.message, history.slice(0, -1), { spoken: body.source === 'voice' });
-    const assistantTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'assistant', content: answer.reply, source: answer.source });
-    return sendJson(res, 200, { ok: true, data: { ...answer, turns: [userTurn, assistantTurn] } });
+    const started = Date.now();
+    try {
+      const userTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'user', content: body.message, source: body.source || 'text' });
+      const history = (await customerData.listTranscripts(session.customer_id,sessionId)).slice(-9);
+      const answer = await aiAgent.conciergeReply(body.message, history.slice(0, -1), { spoken: body.source === 'voice' });
+      const assistantTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'assistant', content: answer.reply, source: answer.source });
+      const log = await logGeneration(req, {
+        route: pathname, feature: 'concierge',
+        provider: answer.source || 'ai', model: answer.model || process.env.XAI_MODEL || 'grok',
+        prompt: body.message, output: answer.reply, success: true,
+        latency_ms: Date.now() - started, customer_id: session.customer_id, session_id: sessionId,
+      });
+      return sendJson(res, 200, { ok: true, generation_id: log.id, data: { ...answer, turns: [userTurn, assistantTurn] } });
+    } catch (error) {
+      await logGeneration(req, {
+        route: pathname, feature: 'concierge', prompt: body?.message,
+        success: false, error: error.message, latency_ms: Date.now() - started,
+        customer_id: session.customer_id,
+      });
+      throw error;
+    }
   }
 
   if (req.method === 'GET' && pathname === '/api/ai/transcripts') {
