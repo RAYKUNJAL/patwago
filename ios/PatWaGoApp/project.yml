@@ -1,0 +1,51 @@
+# XcodeGen spec for the PatWaGo iOS wrapper.
+#
+# This repo is edited on Linux and has no Xcode/macOS toolchain, so this
+# project is deliberately NOT a hand-authored .xcodeproj (those are easy to
+# corrupt by hand and impossible to verify without Xcode). Generate the real
+# .xcodeproj on a Mac with:
+#
+#   brew install xcodegen
+#   cd ios/PatWaGoApp
+#   xcodegen generate
+#   open PatWaGo.xcodeproj
+#
+# See ../../NATIVE_APP.md for the full build/sign/submit walkthrough.
+
+name: PatWaGo
+options:
+  bundleIdPrefix: com.patwago
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_PREVIEWS: true
+
+targets:
+  PatWaGo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/App
+    info:
+      path: Resources/Info.plist
+    settings:
+      base:
+        # Must exactly match APPSTORE_BUNDLE_ID on the server (see
+        # lib/appstore.js / .env.example) — the server rejects any StoreKit
+        # transaction whose bundleId doesn't match this.
+        PRODUCT_BUNDLE_IDENTIFIER: com.patwago.app
+        PRODUCT_NAME: PatWaGo
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    scheme:
+      testPlans: []
+      config:
+        Debug: Debug
+        Release: Release

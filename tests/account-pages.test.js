@@ -297,3 +297,76 @@ test('toast creates and removes a toast node', async () => {
   const created = window.document._created.filter((el) => /toast/.test(el.className || ''));
   assert.ok(created.length >= 1, 'should create at least one toast element');
 });
+
+/* ---------- Apple In-App Purchase bridge (Guideline 3.1.1) ---------- */
+
+test('isIosNativeApp reflects window.PatWaGoNative.platform', () => {
+  const { window } = loadModule(makeDomStub());
+  assert.equal(window.PatWaGoAccountPages.isIosNativeApp(), false);
+  window.PatWaGoNative = { platform: 'ios' };
+  assert.equal(window.PatWaGoAccountPages.isIosNativeApp(), true);
+  window.PatWaGoNative = { platform: 'android' };
+  assert.equal(window.PatWaGoAccountPages.isIosNativeApp(), false);
+});
+
+test('requestNativePurchase posts to the webkit message handler and returns true when present', () => {
+  const { window } = loadModule(makeDomStub());
+  const calls = [];
+  window.webkit = { messageHandlers: { patwagoIAP: { postMessage: (msg) => calls.push(msg) } } };
+  const sent = window.PatWaGoAccountPages.requestNativePurchase('trip');
+  assert.equal(sent, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].plan, 'trip');
+});
+
+test('requestNativePurchase returns false when no native bridge is registered', () => {
+  const { window } = loadModule(makeDomStub());
+  assert.equal(window.PatWaGoAccountPages.requestNativePurchase('day'), false);
+});
+
+test('module always defines window.PatWaGoNative.onPurchaseComplete/onPurchaseFailed for the native shell to call', () => {
+  const { window } = loadModule(makeDomStub());
+  assert.equal(typeof window.PatWaGoNative.onPurchaseComplete, 'function');
+  assert.equal(typeof window.PatWaGoNative.onPurchaseFailed, 'function');
+});
+
+test('onPurchaseComplete verifies the transaction server-side before treating the pass as active', async () => {
+  const stub = makeDomStub();
+  const { window, sandbox } = loadModule(stub);
+  const calls = [];
+  sandbox.fetch = async (url, options) => {
+    calls.push({ url, options });
+    if (url === '/api/appstore/verify-purchase') {
+      return { ok: true, status: 201, json: async () => ({ ok: true, data: { pass: { plan: 'day' } } }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, data: { customer: {}, passes: [], active_pass: true } }) };
+  };
+
+  const container = stub.document.createElement('div');
+  stub.register(container, 'patwago-account');
+  window.PatWaGoAccountPages.mount('patwago-account', { state: 'trial' });
+
+  window.PatWaGoNative.onPurchaseComplete('day', 'fake-jws-token');
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const verifyCall = calls.find((c) => c.url === '/api/appstore/verify-purchase');
+  assert.ok(verifyCall, 'must POST to /api/appstore/verify-purchase');
+  assert.equal(verifyCall.options.method, 'POST');
+  assert.deepEqual(JSON.parse(verifyCall.options.body), { signedTransactionInfo: 'fake-jws-token' });
+});
+
+test('onPurchaseFailed surfaces the failure without touching the network', async () => {
+  const stub = makeDomStub();
+  const { window, sandbox } = loadModule(stub);
+  let fetchCalled = false;
+  sandbox.fetch = async () => { fetchCalled = true; return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+  window.document.body.id = 'body';
+
+  window.PatWaGoNative.onPurchaseFailed('day', 'Cancelled by user');
+  await Promise.resolve();
+
+  assert.equal(fetchCalled, false, 'a failed/cancelled purchase must not call the server');
+  const toasts = window.document._created.filter((el) => /toast/.test(el.className || ''));
+  assert.ok(toasts.some((el) => el.textContent === 'Cancelled by user'));
+});

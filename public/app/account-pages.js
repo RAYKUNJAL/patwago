@@ -64,6 +64,63 @@
     return n.toFixed(2);
   }
 
+  /* Apple Guideline 3.1.1: the native iOS wrapper (ios/PatWaGoApp) injects
+   * window.PatWaGoNative = { platform: 'ios' } before this script runs, via
+   * a WKUserScript at document-start, so pass purchases route to Apple
+   * In-App Purchase instead of PayPal. On the plain website this stays
+   * undefined/false. The server also refuses PayPal pass purchases from
+   * any client that sends the X-Patwago-Client: ios-app header (server.js). */
+  function isIosNativeApp() {
+    return Boolean(window.PatWaGoNative && window.PatWaGoNative.platform === 'ios');
+  }
+
+  // currentMount tracks the last mount() call so the native-purchase
+  // completion callbacks below (invoked by Swift via evaluateJavaScript,
+  // not by any click inside this page) know where to re-render.
+  var currentMount = null;
+
+  /* Ask the native shell to run the real StoreKit 2 purchase UI for `plan`.
+   * ios/PatWaGoApp/Sources/App/WebView.swift registers "patwagoIAP" as a
+   * WKScriptMessageHandler and calls IAPManager.purchase(for:) on receipt.
+   * Returns false (and the caller should fall back to an error message) if
+   * no native bridge is present — e.g. a bug where isIosNativeApp() is true
+   * but the message handler wasn't registered. */
+  function requestNativePurchase(plan) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.patwagoIAP) {
+      window.webkit.messageHandlers.patwagoIAP.postMessage({ plan: plan });
+      return true;
+    }
+    return false;
+  }
+
+  /* Called by IAPManager.swift (via evaluateJavaScript) after StoreKit
+   * reports a successful purchase. signedTransactionInfo is the JWS from
+   * Transaction.jwsRepresentation; the server independently verifies it
+   * (lib/appstore.js) before crediting a pass — the app never trusts its
+   * own claim that a purchase succeeded. */
+  function handleNativePurchaseComplete(plan, signedTransactionInfo) {
+    jsonFetch('/api/appstore/verify-purchase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signedTransactionInfo: signedTransactionInfo }),
+    }).then(function () {
+      toast('Purchase complete. Your pass is active.');
+      if (currentMount) bootstrapProfile(currentMount.container, currentMount.opts);
+    }).catch(function (err) {
+      toast(err.message || 'Your purchase went through with Apple but PatWaGo could not activate it. Contact support.', true);
+    });
+  }
+
+  /* Called by IAPManager.swift when the user cancels or StoreKit reports a
+   * failure — includes plain "user tapped Cancel", which is not an error. */
+  function handleNativePurchaseFailed(plan, message) {
+    if (message) toast(message, true);
+  }
+
+  window.PatWaGoNative = window.PatWaGoNative || {};
+  window.PatWaGoNative.onPurchaseComplete = handleNativePurchaseComplete;
+  window.PatWaGoNative.onPurchaseFailed = handleNativePurchaseFailed;
+
   /* ---------- renderers (return HTML strings) ---------- */
 
   function renderOnboarding() {
@@ -243,7 +300,29 @@
             '<a href="/" class="glass" aria-label="Back to PatWaGo home">← Home</a>' +
           '</div>' +
           '<button class="btn btn-ghost btn-block" data-account-action="logout" style="margin-top:8px" aria-label="Sign out of your account">Sign out</button>' +
+          '<button class="btn btn-ghost btn-block" data-account-action="delete-account" style="margin-top:8px;color:#ff9090" aria-label="Delete your account">Delete account</button>' +
         '</div>' +
+      '</section>';
+  }
+
+  function renderDeleteConfirm(opts) {
+    opts = opts || {};
+    var email = opts.email || 'traveler@example.com';
+    return '' +
+      '<section class="account-shell" aria-label="Delete PatWaGo account" role="region">' +
+        '<div class="account-head">' +
+          '<span class="eyebrow">Delete account</span>' +
+          '<h1>This can&rsquo;t be undone</h1>' +
+          '<p>Deleting <strong>' + escapeHtml(email) + '</strong> permanently removes your account, passes, trips, check-ins, and voice history. Confirm your password to continue.</p>' +
+        '</div>' +
+        '<div class="auth-card glass">' +
+          '<form id="pw-delete-form" class="auth-form" data-account-action="submit-delete" novalidate>' +
+            '<div class="field"><label for="pw-delete-password">Password</label><input id="pw-delete-password" name="password" type="password" autocomplete="current-password" placeholder="Current password" aria-label="Current password" required></div>' +
+            '<p class="auth-hint" id="pw-delete-error" role="alert" hidden></p>' +
+            '<button type="submit" class="btn btn-gold btn-block" style="background:#ff9090" aria-label="Permanently delete my account">Permanently delete my account</button>' +
+          '</form>' +
+        '</div>' +
+        '<p class="auth-hint" style="margin-top:14px;text-align:center"><a href="#" data-account-action="cancel-delete" style="color:#ffd400;font-weight:700">Cancel, keep my account</a></p>' +
       '</section>';
   }
 
@@ -256,8 +335,10 @@
       // fall back to body
       container = document.body;
     }
+    currentMount = { container: container, opts: opts };
     var state = opts.state || 'onboarding';
     render(container, state, opts);
+    if (state === 'profile') bootstrapProfile(container, opts);
 
     // delegate clicks for account actions
     container.addEventListener('click', function (event) {
@@ -280,6 +361,27 @@
     return container;
   }
 
+  /* /app/profile mounts state:"profile" with no customer data (the server
+   * page is static markup). Load the real signed-in customer before
+   * showing pass details or the delete-account action; bounce anonymous
+   * visitors to sign in instead of showing a fake account. */
+  function bootstrapProfile(container, opts) {
+    jsonFetch('/api/account/me').then(function (payload) {
+      var data = payload.data || {};
+      var customer = data.customer || {};
+      var passes = data.passes || [];
+      // Mutate the shared opts object (not a copy) so later actions on this
+      // page — delete-account, manage, cancel-delete — see the real
+      // customer instead of the onboarding-time placeholder.
+      opts.email = customer.email;
+      opts.plan = passes.length ? passes[0].plan : 'day';
+      opts.passActive = Boolean(data.active_pass);
+      render(container, 'profile', opts);
+    }).catch(function () {
+      window.location.href = '/account/login';
+    });
+  }
+
   function render(container, state, opts) {
     var html;
     switch (state) {
@@ -294,6 +396,9 @@
         break;
       case 'profile':
         html = renderProfile(opts);
+        break;
+      case 'delete-confirm':
+        html = renderDeleteConfirm(opts);
         break;
       case 'onboarding':
       default:
@@ -320,6 +425,16 @@
       case 'checkout': {
         var plan = el.getAttribute('data-plan') || 'day';
         var amount = el.getAttribute('data-amount') || '9.99';
+        if (isIosNativeApp()) {
+          // Apple Guideline 3.1.1: no external (PayPal) purchase path for
+          // digital passes inside the native iOS app — hand off to
+          // StoreKit via the native bridge; handleNativePurchaseComplete
+          // picks the flow back up once Apple confirms the purchase.
+          if (!requestNativePurchase(plan)) {
+            toast('In-App Purchase is unavailable in this build.', true);
+          }
+          break;
+        }
         // ask parent to create an order, then render checkout
         var onCheckout = opts.onCheckout || createOrderAndCheckout;
         Promise.resolve(onCheckout(plan, amount)).then(function (order) {
@@ -388,15 +503,42 @@
         render(container, 'onboarding', {});
         toast('Signed out.');
         break;
+      case 'delete-account':
+        render(container, 'delete-confirm', opts);
+        break;
+      case 'cancel-delete':
+        render(container, 'profile', opts);
+        break;
+      case 'submit-delete': {
+        var deleteData = readForm(el);
+        if (!deleteData.password) {
+          showFormError(el, 'Enter your password to confirm.');
+          return;
+        }
+        jsonFetch('/api/account/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: deleteData.password }),
+        }).then(function () {
+          toast('Your account and data have been deleted.');
+          if (opts.onLogout) opts.onLogout();
+          render(container, 'onboarding', {});
+        }).catch(function (err) {
+          showFormError(el, err.message || 'Could not delete account.');
+        });
+        break;
+      }
       default:
         break;
     }
   }
 
   function createOrderAndCheckout(plan, amount) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (isIosNativeApp()) headers['X-Patwago-Client'] = 'ios-app';
     return jsonFetch('/api/paypal/purchase-pass', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({ plan: plan, amount: Number(amount), description: planLabel(plan) }),
     }).then(function (payload) {
       var order = (payload && payload.data) || {};
@@ -443,6 +585,9 @@
     renderTrialStatus: renderTrialStatus,
     renderCheckout: renderCheckout,
     renderProfile: renderProfile,
+    renderDeleteConfirm: renderDeleteConfirm,
+    isIosNativeApp: isIosNativeApp,
+    requestNativePurchase: requestNativePurchase,
     mount: mount,
     toast: toast,
     escapeHtml: escapeHtml,

@@ -3,9 +3,45 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const repoRoot = path.resolve(__dirname, '..');
 const seedFile = path.join(repoRoot, 'data', 'seed.json');
+
+// ---- StoreKit 2 test-transaction signing (see tests/appstore.test.js for
+// unit coverage of the verifier itself; this is just enough to exercise the
+// real /api/appstore/verify-purchase endpoint end to end). ----
+const APPSTORE_FIXTURES = path.join(__dirname, 'fixtures', 'appstore');
+const readFixture = (name) => fs.readFileSync(path.join(APPSTORE_FIXTURES, name), 'utf8');
+const APPSTORE_BUNDLE_ID = 'com.patwago.app';
+
+function derB64FromPem(pem) {
+  return pem.replace(/-----BEGIN CERTIFICATE-----/, '').replace(/-----END CERTIFICATE-----/, '').replace(/\s+/g, '');
+}
+function base64Url(buf) {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function signAppStoreTransaction(overrides = {}) {
+  const leafPem = readFixture('leaf.pem');
+  const leafKeyPem = readFixture('leaf-key.pem');
+  const intermediatePem = readFixture('intermediate.pem');
+  const header = { alg: 'ES256', x5c: [leafPem, intermediatePem].map(derB64FromPem) };
+  const payload = {
+    transactionId: String(Date.now()) + Math.floor(Math.random() * 1000),
+    originalTransactionId: '2000000000000001',
+    bundleId: APPSTORE_BUNDLE_ID,
+    productId: 'com.patwago.pass.day',
+    purchaseDate: Date.now(),
+    signedDate: Date.now(),
+    environment: 'Sandbox',
+    type: 'Non-Renewing Subscription',
+    ...overrides,
+  };
+  const headerB64 = base64Url(Buffer.from(JSON.stringify(header)));
+  const payloadB64 = base64Url(Buffer.from(JSON.stringify(payload)));
+  const signature = crypto.sign('sha256', Buffer.from(`${headerB64}.${payloadB64}`), { key: leafKeyPem, dsaEncoding: 'ieee-p1363' });
+  return `${headerB64}.${payloadB64}.${base64Url(signature)}`;
+}
 
 function makeTempDataDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'patwago-test-'));
@@ -210,6 +246,132 @@ test('reviews update vendor stats and checkout flow exists', async () => {
   });
 });
 
+test('customers can self-service delete their account and all owned data', async () => {
+  await withServer(async ({ base }) => {
+    const { cookie } = await registerTrial(base, 'delete-me');
+
+    const trip = await fetch(`${base}/api/trips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'Negril weekend', destination: 'Negril' }),
+    }).then((r) => r.json());
+    assert.equal(trip.ok, true);
+
+    const wrongPassword = await fetch(`${base}/api/account/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ password: 'not-the-password' }),
+    });
+    assert.equal(wrongPassword.status, 401);
+
+    const me = await fetch(`${base}/api/account/me`, { headers: { Cookie: cookie } });
+    assert.equal(me.status, 200);
+
+    const deleted = await fetch(`${base}/api/account/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ password: 'commercial-password' }),
+    }).then((r) => r.json());
+    assert.equal(deleted.ok, true);
+
+    const meAfter = await fetch(`${base}/api/account/me`, { headers: { Cookie: cookie } });
+    assert.equal(meAfter.status, 401);
+
+    const tripsAfter = await fetch(`${base}/api/trips`, { headers: { Cookie: cookie } });
+    assert.equal(tripsAfter.status, 401);
+  });
+});
+
+test('iOS native app clients cannot buy passes through PayPal (Apple IAP required)', async () => {
+  await withServer(async ({ base }) => {
+    const { cookie } = await registerTrial(base, 'ios-iap');
+
+    const blocked = await fetch(`${base}/api/paypal/purchase-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie, 'X-Patwago-Client': 'ios-app' },
+      body: JSON.stringify({ plan: 'day', amount: 9.99, description: 'Day Pass' }),
+    });
+    assert.equal(blocked.status, 403);
+    const blockedBody = await blocked.json();
+    assert.equal(blockedBody.ok, false);
+    assert.equal(blockedBody.code, 'IAP_REQUIRED');
+
+    const allowed = await fetch(`${base}/api/paypal/purchase-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ plan: 'day', amount: 9.99, description: 'Day Pass' }),
+    });
+    assert.equal(allowed.status, 201);
+  });
+});
+
+test('a verified Apple In-App Purchase credits a pass exactly once, even if replayed', async () => {
+  const priorRoot = process.env.APPSTORE_ROOT_CA_PEM;
+  const priorBundle = process.env.APPSTORE_BUNDLE_ID;
+  delete process.env.APPSTORE_ROOT_CA_PEM;
+  delete process.env.APPSTORE_BUNDLE_ID;
+  try {
+    await withServer(async ({ base }) => {
+      const { cookie } = await registerTrial(base, 'iap-not-configured');
+      const jws = signAppStoreTransaction();
+
+      // Fails closed when the server has no root CA / bundle id configured.
+      const unconfigured = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: jws }),
+      });
+      assert.equal(unconfigured.status, 503);
+    });
+
+    process.env.APPSTORE_ROOT_CA_PEM = readFixture('root-ca.pem');
+    process.env.APPSTORE_BUNDLE_ID = APPSTORE_BUNDLE_ID;
+
+    await withServer(async ({ base }) => {
+      const { cookie } = await registerTrial(base, 'iap-configured');
+
+      const tampered = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: 'not-a-real-jws' }),
+      });
+      assert.equal(tampered.status, 400);
+
+      const jws = signAppStoreTransaction();
+      const first = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: jws }),
+      });
+      assert.equal(first.status, 201);
+      const firstBody = await first.json();
+      assert.equal(firstBody.ok, true);
+      assert.equal(firstBody.data.pass.plan, 'day');
+      assert.equal(firstBody.data.transaction.plan, 'day');
+
+      // StoreKit can redeliver the same transaction (relaunch, entitlement
+      // sync); replaying it must not mint a second pass.
+      const replay = await fetch(`${base}/api/appstore/verify-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ signedTransactionInfo: jws }),
+      });
+      assert.equal(replay.status, 200);
+      const replayBody = await replay.json();
+      assert.equal(replayBody.data.pass.id, firstBody.data.pass.id);
+
+      const me = await fetch(`${base}/api/account/me`, { headers: { Cookie: cookie } }).then((r) => r.json());
+      assert.equal(me.data.active_pass, true);
+      assert.equal(me.data.passes.filter((p) => p.plan === 'day').length, 1);
+    });
+  } finally {
+    if (priorRoot === undefined) delete process.env.APPSTORE_ROOT_CA_PEM;
+    else process.env.APPSTORE_ROOT_CA_PEM = priorRoot;
+    if (priorBundle === undefined) delete process.env.APPSTORE_BUNDLE_ID;
+    else process.env.APPSTORE_BUNDLE_ID = priorBundle;
+  }
+});
+
 test('real internal app pages and assets are served', async () => {
   await withServer(async ({ base }) => {
     const routes = [
@@ -220,13 +382,21 @@ test('real internal app pages and assets are served', async () => {
       ['/app/trips/new', /Build my itinerary with AI/],
       ['/app/voice', /Full transcript/],
       ['/app/guardian', /Travel safety check-ins/],
-      ['/app/profile', /Pass & account/],
     ];
     for (const [route, expected] of routes) {
       const response = await fetch(`${base}${route}`);
       assert.equal(response.status, 200, route);
       assert.match(await response.text(), expected, route);
     }
+
+    // /app/profile is the client-rendered account widget (real pass/email
+    // data + self-service delete come from PatWaGoAccountPages.mount at
+    // runtime), so the server response only needs the mount point + script.
+    const profile = await fetch(`${base}/app/profile`);
+    assert.equal(profile.status, 200);
+    const profileHtml = await profile.text();
+    assert.match(profileHtml, /id="patwago-account"/);
+    assert.match(profileHtml, /PatWaGoAccountPages\.mount\("patwago-account",\{state:"profile"\}\)/);
 
     const vendors = await fetch(`${base}/api/vendors?limit=1`).then((r) => r.json());
     const vendor = vendors.data[0];

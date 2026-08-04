@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>PatWaGo</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- Change to a local dev server (e.g. http://localhost:3000/app) for
+	     local testing; the ATS exception below only opens up localhost. -->
+	<key>PatWaGoBaseURL</key>
+	<string>https://patwago.com/app</string>
+
+	<!-- Guideline 5.1.1 / 2.1: usage strings must accurately describe why
+	     PatWaGo needs each permission. These map to real, reachable
+	     features (Guardian Mode check-ins/SOS/"find near me", AI voice
+	     concierge + Patois translation) — do not add a permission without
+	     an in-app feature that actually triggers the system prompt. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>PatWaGo uses your location for Guardian Mode safety check-ins, the SOS button, and to show verified vendors near you.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PatWaGo uses your microphone for the AI voice concierge and Patois voice translation.</string>
+
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Production traffic must stay HTTPS-only. This exception exists
+		     solely so PatWaGoBaseURL can point at a plain-HTTP local dev
+		     server (e.g. `npm run dev` on localhost:3000) during
+		     development — remove it if that workflow isn't needed. -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
+
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIRequiresFullScreen</key>
+	<false/>
+</dict>
+</plist>
