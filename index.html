@@ -723,7 +723,7 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
                     <button type="button" class="example-chip" data-text="Can you help me with directions to Dunn's River Falls?">Directions to Dunn’s River?</button>
                   </div>
                   <div class="demo-cta-mini">
-                    <span id="demoAttemptsLabel">3 free demo attempts</span>
+                    <span id="demoAttemptsLabel">Free Jamaican voice demo</span>
                     <a href="#pricing" class="btn btn-ghost">Start free trial →</a>
                   </div>
                 </div>
@@ -1418,75 +1418,80 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
   }
 
   function setAttemptsLabel(remaining){
-    if(!attemptsLabel)return;
-    if(remaining==null){attemptsLabel.textContent='3 free demo attempts';return}
-    var n=Number(remaining);
-    if(!Number.isFinite(n))return;
-    if(n<=0){attemptsLabel.textContent='Demo limit reached — start free trial';return}
-    attemptsLabel.textContent=n+' demo attempt'+(n===1?'':'s')+' left';
-  }
-
-  // Fetch TTS mp3, cache it, and play it. Returns a promise.
-  function fetchAndPlayTTS(text,btn){
-    var key=text.trim().toLowerCase();
-    if(audioCache[key]&&audioCache[key].url){
-      playURL(audioCache[key].url);
-      return Promise.resolve();
+      if(!attemptsLabel)return;
+      if(remaining==null){attemptsLabel.textContent='Free Jamaican voice demo';return}
+      var n=Number(remaining);
+      if(!Number.isFinite(n))return;
+      if(n<=0){attemptsLabel.textContent='Voice demo limit reached — text still works';return}
+      attemptsLabel.textContent=n+' voice plays left this hour';
     }
-    if(btn){btn.classList.add('loading');btn.disabled=true}
-    return fetch('/api/voice/demo-tts',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:text})
-    }).then(function(r){
-      var remaining=r.headers.get('X-Demo-Attempts-Remaining');
-      if(remaining!==null)setAttemptsLabel(remaining);
-      if(!r.ok){
-        return r.json().catch(function(){return {}}).then(function(d){
-          var msg=(d&&d.message)||('HTTP '+r.status);
-          if(r.status===429)setAttemptsLabel(0);
-          throw new Error(msg);
-        });
+
+    // Fetch TTS mp3, cache it, and play it. Returns a promise.
+    // Translation UI must already be visible before this runs.
+    function fetchAndPlayTTS(text,btn){
+      var key=text.trim().toLowerCase();
+      if(audioCache[key]&&audioCache[key].url){
+        playURL(audioCache[key].url);
+        return Promise.resolve(true);
       }
-      return r.blob();
-    }).then(function(blob){
-      var url=URL.createObjectURL(blob);
-      audioCache[key]={url:url};
-      playURL(url);
-    }).catch(function(err){
-          console.warn('[PatWaGo TTS] failed:',err);
-          setStatus((err&&err.message)||'Jamaican voice unavailable — try again',true);
-          // Strict rule: never fall back to robotic browser speechSynthesis.
-        }).finally(function(){
-          if(btn){btn.classList.remove('loading');btn.disabled=false}
-        });
-  }
+      if(btn){btn.classList.add('loading');btn.disabled=true}
+      return fetch('/api/voice/demo-tts',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text:text})
+      }).then(function(r){
+        var remaining=r.headers.get('X-Demo-Attempts-Remaining');
+        if(remaining!==null)setAttemptsLabel(remaining);
+        if(!r.ok){
+          return r.json().catch(function(){return {}}).then(function(d){
+            var msg=(d&&d.message)||('HTTP '+r.status);
+            if(r.status===429)setAttemptsLabel(0);
+            throw new Error(msg);
+          });
+        }
+        return r.blob();
+      }).then(function(blob){
+        var url=URL.createObjectURL(blob);
+        audioCache[key]={url:url};
+        playURL(url);
+        return true;
+      }).catch(function(err){
+        console.warn('[PatWaGo TTS] failed:',err);
+        // Keep translation on screen; never use robotic browser TTS.
+        setStatus((err&&err.message)||'Jamaican voice unavailable — translation is ready above',true);
+        return false;
+      }).finally(function(){
+        if(btn){btn.classList.remove('loading');btn.disabled=false}
+      });
+    }
 
-  function playURL(url){
-    stopCurrentAudio();
-    var a=new Audio(url);
-    currentAudio=a;
-    a.play().catch(function(e){console.warn('[PatWaGo] audio play blocked:',e)});
-    a.onended=function(){currentAudio=null};
-  }
+    function playURL(url){
+      stopCurrentAudio();
+      var a=new Audio(url);
+      currentAudio=a;
+      a.play().catch(function(e){console.warn('[PatWaGo] audio play blocked:',e)});
+      a.onended=function(){currentAudio=null};
+    }
 
-  // Wire up speaker buttons (event delegation)
-  chat.addEventListener('click',function(e){
-    var btn=e.target.closest('.spk-btn');
-    if(!btn)return;
-    var text=btn.getAttribute('data-text');
-    if(!text)return;
-    stopCurrentAudio();
-    fetchAndPlayTTS(text,btn);
-  });
+    // Wire up speaker buttons (event delegation)
+    chat.addEventListener('click',function(e){
+      var btn=e.target.closest('.spk-btn');
+      if(!btn)return;
+      var text=btn.getAttribute('data-text');
+      if(!text)return;
+      stopCurrentAudio();
+      fetchAndPlayTTS(text,btn);
+    });
 
-  function setStatus(msg,show){status.textContent=msg||'';if(show!==false){status.classList.add('show')}else{status.classList.remove('show')}}
+    function setStatus(msg,show){status.textContent=msg||'';if(show!==false){status.classList.add('show')}else{status.classList.remove('show')}}
 
     function setListeningUI(on,msg){
       listening=!!on;
       if(on)micBtn.classList.add('listening');
       else micBtn.classList.remove('listening');
       if(msg)setStatus(msg,true);
+      var hint=micBtn.querySelector('.mic-hint');
+      if(hint)hint.textContent=on?'Listening… tap to stop':'Tap to speak';
     }
 
     function translateAndSpeak(spoken){
@@ -1515,9 +1520,11 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
         .catch(function(){return toPatois(spoken)})
         .then(function(patois){
           var bub=addBubble('them','PatWaGo · Patois',patois,true);
-          setStatus('Tap mic, then speak',true);
+          setStatus('Playing Jamaican voice…',true);
           var btn=bub.querySelector('.spk-btn');
-          return fetchAndPlayTTS(patois,btn);
+          return fetchAndPlayTTS(patois,btn).then(function(played){
+            setStatus(played?'Tap mic, then speak':'Translation ready — tap the speaker icon to retry voice',true);
+          });
         })
         .finally(function(){
           demoBusy=false;
@@ -1528,12 +1535,22 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
     var wantListen=false;
     var restartTimer=null;
     var finalBuffer='';
+    var emptyEnds=0;
+    var heardAnything=false;
+    var micStream=null;
 
     function clearRestart(){
       if(restartTimer){clearTimeout(restartTimer);restartTimer=null}
     }
 
-    function hardStopRecog(){
+    function releaseMicStream(){
+      if(micStream){
+        try{micStream.getTracks().forEach(function(t){t.stop()})}catch(e){}
+        micStream=null;
+      }
+    }
+
+    function hardStopRecog(keepStatus){
       wantListen=false;
       clearRestart();
       if(recog){
@@ -1542,7 +1559,20 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
         try{recog.abort()}catch(e){}
         recog=null;
       }
-      setListeningUI(false);
+      releaseMicStream();
+      setListeningUI(false, keepStatus?undefined:undefined);
+    }
+
+    function finishWithSpeech(spoken){
+      spoken=String(spoken||'').trim();
+      finalBuffer='';
+      hardStopRecog(true);
+      if(!spoken){
+        setStatus('No speech captured — try Type mode or an example chip',true);
+        return;
+      }
+      setStatus('Got it — translating…',true);
+      translateAndSpeak(spoken);
     }
 
     function beginRecog(){
@@ -1567,19 +1597,22 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
 
         session.onerror=function(e){
           var err=e&&e.error?e.error:'';
-          // aborted/no-speech happen during normal restart cycles — keep listening
-          if(err==='aborted'||err==='no-speech')return;
+          if(err==='aborted')return;
+          if(err==='no-speech'){
+            // count toward empty ends; onend will restart or stop
+            return;
+          }
           if(err==='not-allowed'||err==='service-not-allowed'||err==='permission-denied'){
-            hardStopRecog();
-            setStatus('Mic access denied — allow microphone permission',true);
+            hardStopRecog(true);
+            setStatus('Mic access denied — allow microphone, then try again',true);
             return;
           }
           if(err==='network'){
-            hardStopRecog();
-            setStatus('Voice recognition needs Chrome/Edge + network. Use Type mode or an example chip.',true);
+            hardStopRecog(true);
+            setStatus('Browser speech service unavailable. Use Type mode or an example chip.',true);
             return;
           }
-          hardStopRecog();
+          hardStopRecog(true);
           setStatus('Microphone error: '+err,true);
         };
 
@@ -1589,67 +1622,85 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
           for(var i=ev.resultIndex;i<ev.results.length;i++){
             var r=ev.results[i];
             var piece=r[0]&&r[0].transcript?r[0].transcript:'';
+            if(!piece)continue;
+            heardAnything=true;
+            emptyEnds=0;
             if(r.isFinal)finalBuffer+=(finalBuffer?' ':'')+piece.trim();
             else interim+=piece;
           }
-          if(interim)setStatus('… '+String(finalBuffer+' '+interim).trim().slice(0,60),true);
-          else if(finalBuffer)setStatus('… '+finalBuffer.slice(0,60),true);
+          if(interim)setStatus('… '+String(finalBuffer+' '+interim).trim().slice(0,70),true);
+          else if(finalBuffer)setStatus('… '+finalBuffer.slice(0,70),true);
 
-          // Once we have a solid final phrase, stop and translate
-          if(finalBuffer&&finalBuffer.trim().split(/\s+/).length>=2){
-            var spoken=finalBuffer.trim();
-            finalBuffer='';
-            hardStopRecog();
-            setStatus('Got it — translating…',true);
-            translateAndSpeak(spoken);
+          // Finalize after a clear phrase (2+ words) or a long single token
+          var words=finalBuffer.trim()?finalBuffer.trim().split(/\s+/):[];
+          if(words.length>=2 || (words.length===1 && words[0].length>=6)){
+            finishWithSpeech(finalBuffer);
           }
         };
 
         session.onend=function(){
           if(recog===session)recog=null;
-          // Chrome often ends the session after a pause — restart while user still wants mic open
-          if(wantListen){
-            // If we already captured a short final (1 word), accept it on session end
-            if(finalBuffer&&finalBuffer.trim()){
-              var spoken=finalBuffer.trim();
-              finalBuffer='';
-              hardStopRecog();
-              setStatus('Got it — translating…',true);
-              translateAndSpeak(spoken);
-              return;
-            }
-            restartTimer=setTimeout(function(){if(wantListen)beginRecog()},280);
-          }else{
+          if(!wantListen){
             setListeningUI(false);
+            return;
           }
+          if(finalBuffer&&finalBuffer.trim()){
+            finishWithSpeech(finalBuffer);
+            return;
+          }
+          if(!heardAnything)emptyEnds+=1;
+          // Chrome often ends sessions; restart a few times, then fail clearly
+          if(emptyEnds>=5){
+            hardStopRecog(true);
+            setStatus('Could not capture speech. Tap Type, press Enter, or use an example chip.',true);
+            return;
+          }
+          setStatus('Listening… keep talking',true);
+          restartTimer=setTimeout(function(){if(wantListen)beginRecog()},300);
         };
 
         session.start();
       }catch(e){
-        // InvalidStateError if a session is still closing — retry shortly
-        if(wantListen)restartTimer=setTimeout(function(){if(wantListen)beginRecog()},350);
+        if(wantListen)restartTimer=setTimeout(function(){if(wantListen)beginRecog()},400);
       }
     }
 
     function startRecog(){
-      if(!SR){setStatus('Voice input not supported in this browser — use Type mode or an example chip',true);return}
+      if(!SR){
+        setStatus('This browser cannot do live speech — use Type mode or an example chip',true);
+        return;
+      }
       if(wantListen)return;
       stopCurrentAudio();
       finalBuffer='';
+      emptyEnds=0;
+      heardAnything=false;
       wantListen=true;
-      setListeningUI(true,'Listening… speak now');
-      beginRecog();
+      setListeningUI(true,'Allow mic, then speak…');
+
+      var startSession=function(){if(wantListen)beginRecog()};
+
+      // Unlock microphone permission first — improves Web Speech reliability
+      if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+        navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+          micStream=stream;
+          setListeningUI(true,'Listening… speak now');
+          startSession();
+        }).catch(function(){
+          // Still try Web Speech — some browsers prompt there instead
+          startSession();
+        });
+      }else{
+        startSession();
+      }
     }
 
     function stopRecog(){
       var spoken=finalBuffer.trim();
-      finalBuffer='';
-      hardStopRecog();
-      if(spoken){
-        setStatus('Got it — translating…',true);
-        translateAndSpeak(spoken);
-      }else{
-        setStatus('Tap mic, then speak',true);
+      if(spoken)finishWithSpeech(spoken);
+      else{
+        hardStopRecog(true);
+        setStatus(heardAnything?'Tap mic and speak a full phrase':'Tap mic, then speak',true);
       }
     }
 

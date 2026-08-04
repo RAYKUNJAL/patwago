@@ -15,33 +15,55 @@ const payments = require('./lib/payments');
 const { createRateLimiter } = require('./lib/rate-limit');
 const googleMaps = require('./lib/google-maps');
 const { speakWithElevenLabs } = require('./lib/elevenlabs');
-// Simple in-memory rate limiter for landing page demo (3 attempts per IP per hour)
+// Landing demo TTS limits (per IP). Only successful audio responses count.
 const demoAttempts = new Map();
-const DEMO_MAX_ATTEMPTS = 3;
-const DEMO_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const DEMO_COOLDOWN_MS = 10 * 1000; // 10 seconds between attempts
+const DEMO_MAX_ATTEMPTS = Number(process.env.DEMO_TTS_MAX_ATTEMPTS || 25);
+const DEMO_WINDOW_MS = Number(process.env.DEMO_TTS_WINDOW_MS || 60 * 60 * 1000);
+const DEMO_COOLDOWN_MS = Number(process.env.DEMO_TTS_COOLDOWN_MS || 1500);
 
-function checkDemoLimit(ip) {
+function getDemoLimitState(ip) {
   const now = Date.now();
   const record = demoAttempts.get(ip);
+  if (!record || now > record.resetAt) {
+    return { allowed: true, remaining: DEMO_MAX_ATTEMPTS, retryAfter: 0, record: null, now };
+  }
+  if (now - record.lastAttempt < DEMO_COOLDOWN_MS) {
+    return {
+      allowed: false,
+      remaining: Math.max(0, DEMO_MAX_ATTEMPTS - record.count),
+      retryAfter: Math.ceil((DEMO_COOLDOWN_MS - (now - record.lastAttempt)) / 1000),
+      record,
+      now,
+    };
+  }
+  if (record.count >= DEMO_MAX_ATTEMPTS) {
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfter: Math.ceil((record.resetAt - now) / 1000),
+      record,
+      now,
+    };
+  }
+  return {
+    allowed: true,
+    remaining: Math.max(0, DEMO_MAX_ATTEMPTS - record.count),
+    retryAfter: 0,
+    record,
+    now,
+  };
+}
 
+function consumeDemoAttempt(ip, state) {
+  const now = state?.now || Date.now();
+  const record = state?.record;
   if (!record || now > record.resetAt) {
     demoAttempts.set(ip, { count: 1, resetAt: now + DEMO_WINDOW_MS, lastAttempt: now });
-    return { allowed: true, remaining: DEMO_MAX_ATTEMPTS - 1 };
+    return Math.max(0, DEMO_MAX_ATTEMPTS - 1);
   }
-
-  // Cooldown check
-  if (now - record.lastAttempt < DEMO_COOLDOWN_MS) {
-    return { allowed: false, remaining: DEMO_MAX_ATTEMPTS - record.count, retryAfter: Math.ceil((DEMO_COOLDOWN_MS - (now - record.lastAttempt)) / 1000) };
-  }
-
-  if (record.count >= DEMO_MAX_ATTEMPTS) {
-    return { allowed: false, remaining: 0, retryAfter: Math.ceil((record.resetAt - now) / 1000) };
-  }
-
-  record.count++;
+  record.count += 1;
   record.lastAttempt = now;
-  return { allowed: true, remaining: DEMO_MAX_ATTEMPTS - record.count };
+  return Math.max(0, DEMO_MAX_ATTEMPTS - record.count);
 }
 
 const ROOT = store.ROOT;
@@ -447,16 +469,18 @@ async function handleApi(req, res, url) {
     return send(res, 200, Buffer.from(await upstream.arrayBuffer()), { 'Content-Type': upstream.headers.get('content-type') || 'audio/mpeg', 'Cache-Control': 'no-store' });
   }
 
-  // Public landing page demo TTS (ElevenLabs, 3 attempts per IP, max 2000 chars)
+  // Public landing page demo TTS (ElevenLabs). Only successful audio counts against limit.
   if (req.method === 'POST' && pathname === '/api/voice/demo-tts') {
     const ip = clientIp(req);
-    const limit = checkDemoLimit(ip);
+    const limit = getDemoLimitState(ip);
 
     if (!limit.allowed) {
       res.setHeader('Retry-After', String(limit.retryAfter || 3600));
       return sendJson(res, 429, {
         ok: false,
-        message: 'Demo limit reached (3 attempts per hour). Start a free trial for unlimited use.',
+        message: limit.remaining === 0
+          ? 'Demo voice limit reached for now. Translation still works — start a free trial for unlimited Jamaican voice.'
+          : `Please wait ${limit.retryAfter || 1}s before another voice demo.`,
       });
     }
 
@@ -467,11 +491,12 @@ async function handleApi(req, res, url) {
 
     try {
       const audio = await speakWithElevenLabs(text);
+      const remaining = consumeDemoAttempt(ip, limit);
       return send(res, 200, audio, {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'no-store',
         'X-Voice-Provider': 'elevenlabs',
-        'X-Demo-Attempts-Remaining': String(limit.remaining),
+        'X-Demo-Attempts-Remaining': String(remaining),
       });
     } catch (error) {
       return sendJson(res, 502, { ok: false, message: error.message });
