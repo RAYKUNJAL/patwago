@@ -689,16 +689,16 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
           </div>
           <div class="ts-status" id="micStatus">Tap mic, then speak</div>
           <div class="ts-header">
-            <div class="ts-title">Patois Translator</div>
-            <div class="ts-sub">English ↔ Patois · voice</div>
+            <div class="ts-title">PatWaGo Concierge</div>
+                        <div class="ts-sub">Ask Jamaica · Tanty answers</div>
           </div>
           <div id="chatBubbles">
-            <div class="ts-bubble me"><span class="lbl">You · English</span>Where can I get good jerk chicken near here?</div>
-            <div class="ts-bubble them"><span class="lbl">PatWaGo · Patois</span>Weh mi can get good jerk chicken roun yah?</div>
-            <div class="ts-divider">translating</div>
-            <div class="ts-bubble me"><span class="lbl">You · English</span>Is it open now?</div>
-            <div class="ts-bubble them"><span class="lbl">PatWaGo · Patois</span>Im open now?</div>
-          </div>
+                      <div class="ts-bubble me"><span class="lbl">You</span>Where can I get good jerk chicken near here?</div>
+                      <div class="ts-bubble them"><span class="lbl">PatWaGo · Tanty</span>Yeah mon — try a verified jerk spot near the beach, confirm the price first, and keep a little cash handy.</div>
+                      <div class="ts-divider">live demo</div>
+                      <div class="ts-bubble me"><span class="lbl">You</span>Is it safe to walk around at night?</div>
+                      <div class="ts-bubble them"><span class="lbl">PatWaGo · Tanty</span>Stay in well-lit areas after dark, use verified transport, and if it feels off, walk good and head back.</div>
+                    </div>
           <button class="ts-mic" id="micBtn" aria-label="Tap to speak" title="Tap to speak">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                       <span class="mic-hint">Tap to speak</span>
@@ -712,9 +712,9 @@ footer{padding:80px 0 40px;border-top:1px solid var(--glass-border);margin-top:4
                   </div>
                   <div id="demoTextMode" class="demo-text-mode" hidden>
                                       <label class="sr-only" for="demoInput">Type a phrase in English</label>
-                                      <textarea id="demoInput" rows="3" maxlength="280" placeholder="Type English, press Enter — hear Patois back"></textarea>
+                                      <textarea id="demoInput" rows="3" maxlength="280" placeholder="Ask anything — Where’s good jerk chicken near Negril?"></textarea>
                                     </div>
-                  <p class="demo-examples-label">Or try one of these:</p>
+                  <p class="demo-examples-label">Try asking Tanty:</p>
                   <div class="example-chips" id="demoExampleChips">
                     <button type="button" class="example-chip" data-text="Where can I get good jerk chicken near here?">Where’s good jerk chicken?</button>
                     <button type="button" class="example-chip" data-text="How much is the taxi to Negril?">Taxi price to Negril?</button>
@@ -1498,42 +1498,50 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
     }
 
     function translateAndSpeak(spoken){
-      spoken=String(spoken||'').trim();
-      if(!spoken||demoBusy)return Promise.resolve();
-      demoBusy=true;
-      if(demoInput)demoInput.disabled=true;
-      addBubble('me','You · English',spoken,false);
-      setStatus('Translating…',true);
-      return fetch('/api/translate',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({text:spoken,from:'en',to:'patois'})
-      })
-        .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d}})})
-        .then(function(res){
-          var t=res.ok&&res.d&&res.d.data&&res.d.data.translation?res.d.data.translation:'';
-          if(t)return t;
-          return fetch('/api/lexicon/translate?q='+encodeURIComponent(spoken))
-            .then(function(r){return r.ok?r.json():null})
-            .then(function(d){
-              var lt=(d&&d.source!=='not-found'&&d.source!=='fallback'&&d.translation)?d.translation:'';
-              return lt||toPatois(spoken);
+        spoken=String(spoken||'').trim();
+        if(!spoken||demoBusy)return Promise.resolve();
+        demoBusy=true;
+        if(demoInput)demoInput.disabled=true;
+        addBubble('me','You',spoken,false);
+        setStatus('Tanty is thinking…',true);
+        return fetch('/api/demo/concierge',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({message:spoken})
+        })
+          .then(function(r){return r.json().then(function(d){return {ok:r.ok,status:r.status,d:d}})})
+          .then(function(res){
+            if(!res.ok){
+              var msg=(res.d&&res.d.message)||'Concierge unavailable';
+              throw new Error(msg);
+            }
+            var reply=res.d&&res.d.data&&res.d.data.reply?String(res.d.data.reply).trim():'';
+            if(!reply)throw new Error('No answer returned');
+            return reply;
+          })
+          .catch(function(err){
+            console.warn('[PatWaGo demo concierge]',err);
+            // Local helpful fallback so the demo never just echoes the question
+            var q=spoken.toLowerCase();
+            if(/jerk|food|eat|hungry/.test(q))return 'Yeah mon — look for a verified jerk kitchen near you, confirm the price before you sit, and keep a little cash ready.';
+            if(/taxi|fare|negril|transport/.test(q))return 'Agree the taxi fare before you leave, use a registered driver when you can, and give yourself extra time for traffic.';
+            if(/safe|night/.test(q))return 'Stay sharp after dark — well-lit areas, verified transport, valuables low-key. If it feels off, walk good and head back.';
+            if(/beach/.test(q))return 'For clear water, hit a known beach early, carry water, and confirm any entry fee when you arrive.';
+            return 'Good question. Tell me your parish and whether you want food, beach, culture, or adventure and I will point you right.';
+          })
+          .then(function(reply){
+            var bub=addBubble('them','PatWaGo · Tanty',reply,true);
+            setStatus('Playing answer…',true);
+            var btn=bub.querySelector('.spk-btn');
+            return fetchAndPlayTTS(reply,btn).then(function(played){
+              setStatus(played?'Ask another question — tap mic or an example':'Answer ready — tap the speaker to hear Tanty',true);
             });
-        })
-        .catch(function(){return toPatois(spoken)})
-        .then(function(patois){
-          var bub=addBubble('them','PatWaGo · Patois',patois,true);
-          setStatus('Playing Jamaican voice…',true);
-          var btn=bub.querySelector('.spk-btn');
-          return fetchAndPlayTTS(patois,btn).then(function(played){
-            setStatus(played?'Tap mic, then speak':'Translation ready — tap the speaker icon to retry voice',true);
+          })
+          .finally(function(){
+            demoBusy=false;
+            if(demoInput)demoInput.disabled=false;
           });
-        })
-        .finally(function(){
-          demoBusy=false;
-          if(demoInput)demoInput.disabled=false;
-        });
-    }
+      }
 
     var wantListen=false;
     var restartTimer=null;
@@ -1574,7 +1582,7 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
         setStatus('No speech captured — try Type mode or an example chip',true);
         return;
       }
-      setStatus('Got it — translating…',true);
+      setStatus('Got it — asking Tanty…',true);
       translateAndSpeak(spoken);
     }
 

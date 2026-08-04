@@ -649,6 +649,39 @@ async function handleApi(req, res, url) {
     return sendJson(res, 201, { ok: true, data: trip });
   }
 
+  // Public landing-page AI demo (no login). Answers traveler questions, rate-limited per IP.
+  if (req.method === 'POST' && pathname === '/api/demo/concierge') {
+    const ip = clientIp(req);
+    const limit = getDemoLimitState(ip);
+    // Share the demo budget with TTS so free traffic can't spam Grok forever.
+    // Do not consume here — only successful voice plays consume; allow more Q&A.
+    if (!limit.allowed && limit.remaining === 0) {
+      res.setHeader('Retry-After', String(limit.retryAfter || 3600));
+      return sendJson(res, 429, {
+        ok: false,
+        message: 'Demo limit reached for now. Start a free trial for unlimited concierge answers.',
+      });
+    }
+    const body = await readBody(req);
+    const message = String(body.message || body.text || body.q || '').trim().slice(0, 500);
+    if (!message) return sendJson(res, 400, { ok: false, message: 'message is required' });
+    try {
+      const answer = await aiAgent.conciergeReply(message, [], { demo: true, spoken: true });
+      const reply = String(answer.reply || '').trim().slice(0, 700);
+      return sendJson(res, 200, {
+        ok: true,
+        data: {
+          question: message,
+          reply,
+          model: answer.model,
+          source: answer.source,
+        },
+      });
+    } catch (error) {
+      return sendJson(res, 502, { ok: false, message: error.message || 'Concierge unavailable' });
+    }
+  }
+
   if (req.method === 'POST' && pathname === '/api/ai/concierge') {
     const session = await requireCustomer(req, res, true);
     if (!session) return true;
@@ -656,7 +689,7 @@ async function handleApi(req, res, url) {
     const sessionId = String(body.session_id || 'default').slice(0, 120);
     const userTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'user', content: body.message, source: body.source || 'text' });
     const history = (await customerData.listTranscripts(session.customer_id,sessionId)).slice(-9);
-    const answer = await aiAgent.conciergeReply(body.message, history.slice(0, -1));
+    const answer = await aiAgent.conciergeReply(body.message, history.slice(0, -1), { spoken: body.source === 'voice' });
     const assistantTurn = await customerData.saveTranscript(session.customer_id,{ session_id: sessionId, role: 'assistant', content: answer.reply, source: answer.source });
     return sendJson(res, 200, { ok: true, data: { ...answer, turns: [userTurn, assistantTurn] } });
   }
