@@ -13,20 +13,24 @@ const { createPayPalService, PLAN_PRICES } = require('./lib/paypal');
 const customerData = require('./lib/customer-data');
 const payments = require('./lib/payments');
 const { createRateLimiter } = require('./lib/rate-limit');
-const { speakWithElevenLabs } = require('./lib/elevenlabs');
-
 // Simple in-memory rate limiter for landing page demo (3 attempts per IP per hour)
 const demoAttempts = new Map();
 const DEMO_MAX_ATTEMPTS = 3;
 const DEMO_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const DEMO_COOLDOWN_MS = 10 * 1000; // 10 seconds between attempts
 
 function checkDemoLimit(ip) {
   const now = Date.now();
   const record = demoAttempts.get(ip);
 
   if (!record || now > record.resetAt) {
-    demoAttempts.set(ip, { count: 1, resetAt: now + DEMO_WINDOW_MS });
+    demoAttempts.set(ip, { count: 1, resetAt: now + DEMO_WINDOW_MS, lastAttempt: now });
     return { allowed: true, remaining: DEMO_MAX_ATTEMPTS - 1 };
+  }
+
+  // Cooldown check
+  if (now - record.lastAttempt < DEMO_COOLDOWN_MS) {
+    return { allowed: false, remaining: DEMO_MAX_ATTEMPTS - record.count, retryAfter: Math.ceil((DEMO_COOLDOWN_MS - (now - record.lastAttempt)) / 1000) };
   }
 
   if (record.count >= DEMO_MAX_ATTEMPTS) {
@@ -34,6 +38,7 @@ function checkDemoLimit(ip) {
   }
 
   record.count++;
+  record.lastAttempt = now;
   return { allowed: true, remaining: DEMO_MAX_ATTEMPTS - record.count };
 }
 
