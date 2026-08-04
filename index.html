@@ -1454,13 +1454,12 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
       audioCache[key]={url:url};
       playURL(url);
     }).catch(function(err){
-      console.warn('[PatWaGo TTS] failed:',err);
-      setStatus((err&&err.message)||'Voice demo unavailable',true);
-      // fallback to browser speech synthesis
-      try{if('speechSynthesis' in window){var u=new SpeechSynthesisUtterance(text);u.lang='en-JM';u.rate=0.95;speechSynthesis.speak(u)}}catch(e){}
-    }).finally(function(){
-      if(btn){btn.classList.remove('loading');btn.disabled=false}
-    });
+          console.warn('[PatWaGo TTS] failed:',err);
+          setStatus((err&&err.message)||'Jamaican voice unavailable — try again',true);
+          // Strict rule: never fall back to robotic browser speechSynthesis.
+        }).finally(function(){
+          if(btn){btn.classList.remove('loading');btn.disabled=false}
+        });
   }
 
   function playURL(url){
@@ -1483,18 +1482,35 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
 
   function setStatus(msg,show){status.textContent=msg||'';if(show!==false){status.classList.add('show')}else{status.classList.remove('show')}}
 
-  function translateAndSpeak(spoken){
+    function setListeningUI(on,msg){
+      listening=!!on;
+      if(on)micBtn.classList.add('listening');
+      else micBtn.classList.remove('listening');
+      if(msg)setStatus(msg,true);
+    }
+
+    function translateAndSpeak(spoken){
       spoken=String(spoken||'').trim();
       if(!spoken||demoBusy)return Promise.resolve();
       demoBusy=true;
       if(demoInput)demoInput.disabled=true;
       addBubble('me','You · English',spoken,false);
       setStatus('Translating…',true);
-      return fetch('/api/lexicon/translate?q='+encodeURIComponent(spoken))
-        .then(function(r){return r.ok?r.json():null})
-        .then(function(d){
-          var t=(d&&d.source!=='not-found'&&d.translation)?d.translation:'';
-          return t||toPatois(spoken);
+      return fetch('/api/translate',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text:spoken,from:'en',to:'patois'})
+      })
+        .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d}})})
+        .then(function(res){
+          var t=res.ok&&res.d&&res.d.data&&res.d.data.translation?res.d.data.translation:'';
+          if(t)return t;
+          return fetch('/api/lexicon/translate?q='+encodeURIComponent(spoken))
+            .then(function(r){return r.ok?r.json():null})
+            .then(function(d){
+              var lt=(d&&d.source!=='not-found'&&d.source!=='fallback'&&d.translation)?d.translation:'';
+              return lt||toPatois(spoken);
+            });
         })
         .catch(function(){return toPatois(spoken)})
         .then(function(patois){
@@ -1509,43 +1525,145 @@ function fmtMoney(n){return '$'+(Math.round(Number(n||0)*100)/100).toFixed(2)}
         });
     }
 
-  function startRecog(){
-    if(!SR){setStatus('Voice input not supported in this browser',true);return}
-    recog=new SR();
-    recog.lang='en-US';
-    recog.interimResults=true;
-    recog.continuous=false;
-    recog.onstart=function(){listening=true;micBtn.classList.add('listening');setStatus('Listening… speak now',true)};
-    recog.onerror=function(e){
-      listening=false;micBtn.classList.remove('listening');
-      var msg='Microphone error';
-      if(e.error==='not-allowed'||e.error==='permission-denied'){msg='Mic access denied — allow microphone permission'}
-      else if(e.error==='no-speech'){msg='No speech detected — try again'}
-      else if(e.error==='network'){msg='Network error during recognition'}
-      else{msg='Error: '+e.error}
-      setStatus(msg,true);
-    };
-    recog.onend=function(){listening=false;micBtn.classList.remove('listening');if(status.textContent==='Listening… speak now'){setStatus('Tap mic, then speak',true)}};
-    recog.onresult=function(ev){
-      var interim='',finalT='';
-      for(var i=ev.resultIndex;i<ev.results.length;i++){
-        var r=ev.results[i];
-        if(r.isFinal){finalT+=r[0].transcript}else{interim+=r[0].transcript}
-      }
-      if(interim){setStatus('… '+interim.slice(0,60),true)}
-      if(finalT){translateAndSpeak(finalT.trim())}
-    };
-    try{recog.start()}catch(e){setStatus('Could not start mic',true)}
-  }
-  function stopRecog(){if(recog){try{recog.stop()}catch(e){}}listening=false;micBtn.classList.remove('listening')}
+    var wantListen=false;
+    var restartTimer=null;
+    var finalBuffer='';
 
-  micBtn.addEventListener('click',function(){
-    if(listening){stopRecog()}else{stopCurrentAudio();startRecog()}
-  });
-  if(!SR){
-    micBtn.addEventListener('click',function(){setStatus('Your browser does not support voice input (try Chrome/Edge)',true)},{once:true});
-  }
-  setStatus('Tap mic, then speak',true);
+    function clearRestart(){
+      if(restartTimer){clearTimeout(restartTimer);restartTimer=null}
+    }
+
+    function hardStopRecog(){
+      wantListen=false;
+      clearRestart();
+      if(recog){
+        try{recog.onend=null;recog.onerror=null;recog.onresult=null;recog.onstart=null}catch(e){}
+        try{recog.stop()}catch(e){}
+        try{recog.abort()}catch(e){}
+        recog=null;
+      }
+      setListeningUI(false);
+    }
+
+    function beginRecog(){
+      if(!wantListen||!SR)return;
+      clearRestart();
+      try{
+        if(recog){
+          try{recog.onend=null;recog.stop()}catch(e){}
+          recog=null;
+        }
+        var session=new SR();
+        recog=session;
+        session.lang='en-US';
+        session.interimResults=true;
+        session.continuous=true;
+        session.maxAlternatives=1;
+
+        session.onstart=function(){
+          if(!wantListen)return;
+          setListeningUI(true,'Listening… speak now');
+        };
+
+        session.onerror=function(e){
+          var err=e&&e.error?e.error:'';
+          // aborted/no-speech happen during normal restart cycles — keep listening
+          if(err==='aborted'||err==='no-speech')return;
+          if(err==='not-allowed'||err==='service-not-allowed'||err==='permission-denied'){
+            hardStopRecog();
+            setStatus('Mic access denied — allow microphone permission',true);
+            return;
+          }
+          if(err==='network'){
+            hardStopRecog();
+            setStatus('Voice recognition needs Chrome/Edge + network. Use Type mode or an example chip.',true);
+            return;
+          }
+          hardStopRecog();
+          setStatus('Microphone error: '+err,true);
+        };
+
+        session.onresult=function(ev){
+          if(!wantListen)return;
+          var interim='';
+          for(var i=ev.resultIndex;i<ev.results.length;i++){
+            var r=ev.results[i];
+            var piece=r[0]&&r[0].transcript?r[0].transcript:'';
+            if(r.isFinal)finalBuffer+=(finalBuffer?' ':'')+piece.trim();
+            else interim+=piece;
+          }
+          if(interim)setStatus('… '+String(finalBuffer+' '+interim).trim().slice(0,60),true);
+          else if(finalBuffer)setStatus('… '+finalBuffer.slice(0,60),true);
+
+          // Once we have a solid final phrase, stop and translate
+          if(finalBuffer&&finalBuffer.trim().split(/\s+/).length>=2){
+            var spoken=finalBuffer.trim();
+            finalBuffer='';
+            hardStopRecog();
+            setStatus('Got it — translating…',true);
+            translateAndSpeak(spoken);
+          }
+        };
+
+        session.onend=function(){
+          if(recog===session)recog=null;
+          // Chrome often ends the session after a pause — restart while user still wants mic open
+          if(wantListen){
+            // If we already captured a short final (1 word), accept it on session end
+            if(finalBuffer&&finalBuffer.trim()){
+              var spoken=finalBuffer.trim();
+              finalBuffer='';
+              hardStopRecog();
+              setStatus('Got it — translating…',true);
+              translateAndSpeak(spoken);
+              return;
+            }
+            restartTimer=setTimeout(function(){if(wantListen)beginRecog()},280);
+          }else{
+            setListeningUI(false);
+          }
+        };
+
+        session.start();
+      }catch(e){
+        // InvalidStateError if a session is still closing — retry shortly
+        if(wantListen)restartTimer=setTimeout(function(){if(wantListen)beginRecog()},350);
+      }
+    }
+
+    function startRecog(){
+      if(!SR){setStatus('Voice input not supported in this browser — use Type mode or an example chip',true);return}
+      if(wantListen)return;
+      stopCurrentAudio();
+      finalBuffer='';
+      wantListen=true;
+      setListeningUI(true,'Listening… speak now');
+      beginRecog();
+    }
+
+    function stopRecog(){
+      var spoken=finalBuffer.trim();
+      finalBuffer='';
+      hardStopRecog();
+      if(spoken){
+        setStatus('Got it — translating…',true);
+        translateAndSpeak(spoken);
+      }else{
+        setStatus('Tap mic, then speak',true);
+      }
+    }
+
+    micBtn.addEventListener('click',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(wantListen||listening)stopRecog();
+      else startRecog();
+    });
+    if(!SR){
+      setStatus('Type a phrase or tap an example — live mic needs Chrome/Edge',true);
+    }else{
+      setStatus('Tap mic, then speak',true);
+    }
 
   // Mode toggle: Speak / Type
   modeButtons.forEach(function(btn){
